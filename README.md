@@ -14,7 +14,7 @@ http://kachurovskiy.com/redalert/ - single-file, browser-only monitor for contra
 - Shows the full-width series chart on the main tab with every year labeled, vertical new-year boundary lines, transparent green signal-period bands, and signal-start markers on the selected ticker line.
 - Starts the Overview chart at 10 years by default on wider screens and 1 year by default on narrow screens, with controls for all data or the last 10, 5, 3, or 1 years.
 - Keeps the current signal summary on a separate tab whose label reports whether a signal is active.
-- Shows 1, 3, 6, and 12 month projected returns on the Signal tab, using prior signal starts under the current criteria even when the latest row has no active signal.
+- Shows 1, 3, 6, and 12 month historical forward-return averages on the Signal tab, using prior signal starts under the current criteria. These are backward-looking samples, not forecasts.
 - Groups signal criteria, market ticker selection, return checkpoints, optimizer cadence, and full local-storage reset controls in the Settings tab.
 - Provides an optimizer tab that ranks candidate criteria by forward-return quality, loss rate, loss size, and a configurable signal cadence target, with per-row Apply buttons for choosing a preferred variant. It also estimates the best percent of remaining cash to deploy on each active signal day, resetting capital for each contiguous signal period rather than holding all buys to the latest date. Optimizer work runs in a Web Worker pool when multiple CPU cores are available, with progress reporting so the page remains responsive.
 - Shows selected-ticker forward returns after configurable month checkpoints, defaulting to 3, 6, and 12 months.

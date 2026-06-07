@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Browser-only market sentiment monitor for contrarian opportunity signals." />
   <meta name="referrer" content="no-referrer" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'; connect-src https://production.dataviz.cnn.io https://api.allorigins.win https://raw.githubusercontent.com https://query1.finance.yahoo.com https://r.jina.ai; script-src 'unsafe-inline'; worker-src blob:; style-src 'unsafe-inline'; img-src 'none';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'; connect-src https://production.dataviz.cnn.io https://api.allorigins.win https://raw.githubusercontent.com https://query1.finance.yahoo.com https://r.jina.ai; script-src 'unsafe-inline'; worker-src blob:; style-src 'unsafe-inline'; img-src data:;" />
   <title>Opportunity Radar</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23182033'/%3E%3Cpath d='M10 42h44L46 24 36 38 28 18 18 42Z' fill='%23ef4444'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23f8fafc'/%3E%3C/svg%3E" />
   <style>
     :root {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -411,7 +412,7 @@
       padding: 8px;
       text-align: left;
     }
-    code { padding: 2px 4px; border-radius: 4px; background: rgba(127,127,127,.15); }
+    code { padding: 2px 4px; border-radius: 4px; background: rgba(127,127,127,0.15); }
     .danger { color: var(--danger); background: var(--danger-soft); }
     .pill {
       display: inline-block;
@@ -576,7 +577,7 @@
             <span id="opportunityCount" class="metric-value">-</span>
           </div>
         </div>
-        <h3>Projected returns</h3>
+        <h3>Historical forward returns</h3>
         <p id="signalProjectionSummary" class="muted"></p>
         <div id="signalProjectionWrap" class="table-scroll"></div>
         <div class="row signal-actions">
@@ -1645,7 +1646,7 @@ function renderMarketTickerControls(ticker = loadMarketTicker()) {
   if (preset) preset.value = MARKET_TICKER_PRESETS.includes(marketTicker) ? marketTicker : "custom";
   if (input) input.value = marketTicker;
   if (summary) {
-    summary.textContent = `Active ticker: ${marketTicker}. Used for the chart overlay, projected returns, forward returns, and optimizer calculations.`;
+    summary.textContent = `Active ticker: ${marketTicker}. Used for the chart overlay, historical forward returns, and optimizer calculations.`;
   }
   if (legend) legend.textContent = `${marketTicker} price`;
   if (marker) marker.textContent = `Signal start on ${marketTicker}`;
@@ -1996,25 +1997,21 @@ function renderSignalProjection(rows, latest) {
     : `No active signal on ${latest.date}.`;
 
   summary.textContent =
-    `${stateText} Based on prior signal starts under the current criteria before ${latest.date}. ${maxSampleCount.toLocaleString()} historical samples are available at the most-complete horizon.${entryText}`;
+    `${stateText} Historical forward returns below use prior signal starts under the current criteria before ${latest.date}; they are backward-looking samples, not forecasts. ${maxSampleCount.toLocaleString()} samples are available at the most-complete horizon.${entryText}`;
 
   wrap.innerHTML = projections.some(item => item.count)
     ? `<table>
         <thead>
           <tr>
             <th>Horizon</th>
-            <th>Projected return</th>
+            <th>Average return</th>
             <th>Median</th>
             <th>Win rate</th>
             <th>Samples</th>
-            <th>Projected ${escapeHtml(marketTicker)}</th>
           </tr>
         </thead>
         <tbody>
           ${projections.map(item => {
-            const projectedSpy = entry && Number.isFinite(item.avg)
-              ? entry.spy * (1 + item.avg / 100)
-              : null;
             return `
             <tr>
               <td>${escapeHtml(formatCheckpointLabel(item.months))}</td>
@@ -2022,7 +2019,6 @@ function renderSignalProjection(rows, latest) {
               <td>${formatProjectionPercent(item.median)}</td>
               <td>${formatPercent(item.winRate * 100)}</td>
               <td>${item.count}</td>
-              <td>${projectedSpy == null ? "" : formatCurrency(projectedSpy)}</td>
             </tr>`;
           }).join("")}
         </tbody>
@@ -2293,6 +2289,7 @@ ${buildForwardReturn.toString()}
 ${buildForwardReturns.toString()}
 ${average.toString()}
 ${yearsBetween.toString()}
+${daysBetweenIso.toString()}
 ${cadenceFitScore.toString()}
 ${buildDeploymentPeriods.toString()}
 ${simulateDeploymentPeriod.toString()}
