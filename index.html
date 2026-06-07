@@ -1,0 +1,3643 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Browser-only market sentiment monitor for contrarian opportunity signals." />
+  <meta name="referrer" content="no-referrer" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'; connect-src https://production.dataviz.cnn.io https://api.allorigins.win https://raw.githubusercontent.com https://query1.finance.yahoo.com https://r.jina.ai; script-src 'unsafe-inline'; worker-src blob:; style-src 'unsafe-inline'; img-src 'none';" />
+  <title>Opportunity Radar</title>
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color-scheme: light dark;
+      --bg: #f6f7f9;
+      --surface: #ffffff;
+      --surface-soft: #eef2f7;
+      --surface-softer: #f8fafc;
+      --text: #182033;
+      --muted: #667085;
+      --line: #d9e0ea;
+      --line-soft: #edf1f6;
+      --accent: #2563eb;
+      --accent-soft: rgba(37, 99, 235, 0.11);
+      --green: #138a52;
+      --green-soft: rgba(19, 138, 82, 0.12);
+      --warn-soft: rgba(190, 120, 0, 0.12);
+      --danger: #b00020;
+      --danger-soft: rgba(176, 0, 32, 0.10);
+      --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+      overflow-x: hidden;
+    }
+    .app-shell {
+      width: min(1320px, calc(100% - clamp(24px, 5vw, 64px)));
+      margin: 0 auto;
+      padding: 28px 0 44px;
+    }
+    .app-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: end;
+      justify-content: space-between;
+      gap: 14px 28px;
+      margin-bottom: 18px;
+    }
+    .app-title {
+      margin: 0;
+      font-size: clamp(1.7rem, 3vw, 2.55rem);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+    .app-subtitle {
+      max-width: none;
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 0.96rem;
+      white-space: nowrap;
+    }
+    h1, h2, h3 { letter-spacing: 0; }
+    h2 { margin: 0 0 12px; }
+    h3 { margin: 18px 0 8px; }
+    .muted { color: var(--muted); }
+    .card {
+      border-radius: 8px;
+      padding: 20px;
+      margin: 16px 0;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .chart-card {
+      width: 100vw;
+      margin-left: calc(50% - 50vw);
+      margin-right: calc(50% - 50vw);
+      padding-left: clamp(16px, 2.2vw, 32px);
+      padding-right: clamp(16px, 2.2vw, 32px);
+      border-radius: 0;
+      box-sizing: border-box;
+    }
+    .wide-card {
+      width: min(1600px, calc(100vw - 32px));
+      margin-left: calc((min(1320px, calc(100vw - clamp(24px, 5vw, 64px))) - min(1600px, calc(100vw - 32px))) / 2);
+      margin-right: calc((min(1320px, calc(100vw - clamp(24px, 5vw, 64px))) - min(1600px, calc(100vw - 32px))) / 2);
+      box-sizing: border-box;
+    }
+    .optimizer-card {
+      width: 100vw;
+      margin-left: calc(50% - 50vw);
+      margin-right: calc(50% - 50vw);
+      padding-left: clamp(16px, 2.2vw, 32px);
+      padding-right: clamp(16px, 2.2vw, 32px);
+      border-radius: 0;
+      box-sizing: border-box;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: end;
+    }
+    .tabs {
+      margin-top: 18px;
+    }
+    .tab-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 8px;
+      background: var(--surface-soft);
+      width: fit-content;
+      max-width: 100%;
+    }
+    .tab-button {
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      padding: 8px 11px;
+    }
+    .tab-button[aria-selected="true"] {
+      font-weight: 700;
+      color: var(--text);
+      background: var(--surface);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    }
+    .tab-panel[hidden] {
+      display: none;
+    }
+    .chart-wrap {
+      min-height: 520px;
+      position: relative;
+    }
+    #historyChart {
+      display: block;
+      width: 100%;
+      height: 520px;
+    }
+    .chart-tooltip {
+      position: absolute;
+      z-index: 3;
+      display: none;
+      width: min(280px, calc(100% - 24px));
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(24, 32, 51, 0.94);
+      color: #fff;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.22);
+      font-size: 0.86rem;
+      line-height: 1.35;
+      pointer-events: none;
+    }
+    .chart-tooltip strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.92rem;
+    }
+    .chart-tooltip-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .chart-tooltip-row span:first-child {
+      color: rgba(255, 255, 255, 0.72);
+    }
+    .chart-tooltip-reason {
+      margin-top: 7px;
+      color: rgba(255, 255, 255, 0.86);
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      margin-top: 10px;
+      font-size: 0.9rem;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .chart-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px 16px;
+      margin: 4px 0 12px;
+    }
+    .segmented {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 3px;
+      border-radius: 8px;
+      background: var(--surface-soft);
+    }
+    .segmented button {
+      border: 0;
+      background: transparent;
+      min-width: 46px;
+      color: var(--muted);
+    }
+    .segmented button[aria-pressed="true"] {
+      color: var(--text);
+      background: var(--surface);
+      font-weight: 700;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    }
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+    }
+    .swatch.line { background: #93c5fd; }
+    .swatch.spy { background: #b7791f; }
+    .swatch.period { background: rgba(19, 138, 82, 0.18); }
+    .swatch.marker { background: var(--green); border-radius: 999px; }
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+    .metric {
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 62px;
+      background: var(--surface-soft);
+    }
+    .metric-label {
+      display: block;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+    .metric-value {
+      display: block;
+      margin-top: 4px;
+      font-size: 1.15rem;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+    .signal-actions {
+      margin-top: 14px;
+    }
+    .criteria-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+      margin: 14px 0;
+    }
+    .setting-section + .setting-section {
+      margin-top: 18px;
+      padding-top: 18px;
+      box-shadow: inset 0 1px 0 var(--line-soft);
+    }
+    .criterion {
+      border-radius: 8px;
+      padding: 12px;
+      background: var(--surface-soft);
+    }
+    .criterion-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+    }
+    .criterion-fields {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+      align-items: center;
+    }
+    label.compact {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    label.flex-input {
+      flex: 1 1 260px;
+      min-width: 0;
+    }
+    label.flex-input input {
+      flex: 1 1 180px;
+      min-width: 0;
+      width: 100%;
+    }
+    input,
+    select {
+      font: inherit;
+      padding: 7px 9px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--text);
+    }
+    input[type="number"] {
+      width: 86px;
+    }
+    input.wide-input {
+      min-width: 0;
+      max-width: 100%;
+    }
+    button {
+      font: inherit;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 0;
+      background: var(--surface-soft);
+      color: var(--text);
+    }
+    button { cursor: pointer; }
+    button.primary {
+      font-weight: 700;
+      background: var(--accent);
+      color: #fff;
+    }
+    .status {
+      font-weight: 700;
+      padding: 12px;
+      border-radius: 8px;
+    }
+    .opportunity { background: var(--green-soft); color: var(--green); }
+    .ok { background: var(--green-soft); }
+    .table-scroll {
+      max-height: 620px;
+      overflow: auto;
+    }
+    .wide-table {
+      min-width: 1380px;
+      table-layout: fixed;
+    }
+    #optimizerWrap.table-scroll {
+      overflow-x: hidden;
+    }
+    .optimizer-table {
+      width: 100%;
+      min-width: 0;
+      font-size: 0.84rem;
+    }
+    .optimizer-table th,
+    .optimizer-table td {
+      padding: 7px 5px;
+      overflow-wrap: anywhere;
+    }
+    .wide-table th,
+    .wide-table td {
+      vertical-align: middle;
+    }
+    .wide-table .criteria-cell {
+      width: 320px;
+      white-space: normal;
+      line-height: 1.35;
+    }
+    .wide-table .action-cell {
+      width: 78px;
+      text-align: center;
+    }
+    .optimizer-table .rank-cell { width: 48px; }
+    .optimizer-table .score-cell,
+    .optimizer-table .count-cell { width: 70px; }
+    .optimizer-table .rate-cell,
+    .optimizer-table .return-cell,
+    .optimizer-table .loss-cell,
+    .optimizer-table .deploy-cell { width: 88px; }
+    #optimizerWrap .optimizer-table .rank-cell { width: 3.2%; }
+    #optimizerWrap .optimizer-table .score-cell,
+    #optimizerWrap .optimizer-table .count-cell { width: 4.1%; }
+    #optimizerWrap .optimizer-table .rate-cell,
+    #optimizerWrap .optimizer-table .return-cell,
+    #optimizerWrap .optimizer-table .loss-cell,
+    #optimizerWrap .optimizer-table .deploy-cell { width: 4.6%; }
+    #optimizerWrap .optimizer-table .criteria-cell { width: 18%; }
+    #optimizerWrap .optimizer-table .action-cell { width: 4%; }
+    #tableWrap.table-scroll {
+      max-height: clamp(320px, calc(100vh - 380px), 680px);
+      min-height: 0;
+    }
+    .progress-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 8px 0;
+    }
+    .progress-row[hidden] {
+      display: none;
+    }
+    progress {
+      width: min(420px, 100%);
+      height: 14px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.92rem;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 700;
+      background: var(--surface-softer);
+    }
+    th, td {
+      border-bottom: 1px solid var(--line-soft);
+      padding: 8px;
+      text-align: left;
+    }
+    code { padding: 2px 4px; border-radius: 4px; background: rgba(127,127,127,.15); }
+    .danger { color: var(--danger); background: var(--danger-soft); }
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--green-soft);
+      color: var(--green);
+      font-size: 0.85rem;
+    }
+    .cell-note {
+      display: block;
+      color: var(--muted);
+      font-size: 0.82rem;
+      margin-top: 2px;
+    }
+    .return-positive { color: #138a52; }
+    .return-negative { color: #b00020; }
+    .source-summary {
+      border-radius: 8px;
+      padding: 10px;
+      margin: 10px 0;
+    }
+    .source-summary.ok { background: var(--green-soft); }
+    .source-summary.warn { background: var(--warn-soft); }
+    .source-summary.action { background: var(--danger-soft); color: var(--danger); }
+    .source-summary.pending { background: var(--accent-soft); }
+    .status-badge {
+      display: inline-block;
+      min-width: 86px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      text-align: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+    .status-badge.ok { color: var(--green); background: var(--green-soft); }
+    .status-badge.warn { color: #9a5b00; background: var(--warn-soft); }
+    .status-badge.action { color: var(--danger); background: var(--danger-soft); }
+    .status-badge.pending { color: var(--muted); background: var(--surface-soft); }
+    tr.source-action-needed {
+      background: rgba(176, 0, 32, 0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111827;
+        --surface: #182131;
+        --surface-soft: #232d3d;
+        --surface-softer: #1f2937;
+        --text: #edf2f7;
+        --muted: #a6b0c3;
+        --line: #374151;
+        --line-soft: #2d3748;
+        --shadow: 0 16px 40px rgba(0, 0, 0, 0.24);
+      }
+    }
+    @media (max-width: 760px) {
+      .app-shell {
+        width: min(100% - 24px, 1320px);
+        padding-top: 18px;
+      }
+      .app-header {
+        display: block;
+      }
+      .app-subtitle {
+        white-space: normal;
+      }
+      .tab-list {
+        width: 100%;
+      }
+      .wide-card,
+      .optimizer-card {
+        width: auto;
+        margin-left: 0;
+        margin-right: 0;
+        border-radius: 8px;
+      }
+      .chart-wrap {
+        min-height: 360px;
+      }
+      #historyChart {
+        height: 360px;
+      }
+      .metric-grid {
+        grid-template-columns: 1fr;
+      }
+      #tableWrap.table-scroll {
+        max-height: 620px;
+        min-height: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+  <header class="app-header">
+    <div>
+      <h1 class="app-title">Opportunity Radar</h1>
+      <p class="app-subtitle">
+        Threshold-based Fear & Greed monitor with market context, VIX criteria, forward returns, and optimizer tools. Unaffiliated with CNN; not financial advice.
+      </p>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab-list" role="tablist" aria-label="Views">
+      <button id="tab-overview" class="tab-button" type="button" role="tab" aria-selected="true" aria-controls="panel-overview" data-tab="overview">Overview</button>
+      <button id="tab-signal" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-signal" data-tab="signal">Signal: No data</button>
+      <button id="tab-criteria" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-criteria" data-tab="criteria">Settings</button>
+      <button id="tab-optimizer" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-optimizer" data-tab="optimizer">Optimizer</button>
+      <button id="tab-returns" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-returns" data-tab="returns">Returns</button>
+      <button id="tab-history" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-history" data-tab="history">History</button>
+      <button id="tab-sources" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-sources" data-tab="sources">Sources</button>
+    </div>
+
+    <section id="panel-overview" class="tab-panel" role="tabpanel" aria-labelledby="tab-overview" data-panel="overview">
+      <div class="card chart-card">
+        <h2>Opportunity chart</h2>
+        <div class="chart-toolbar">
+          <div class="segmented" role="group" aria-label="Chart range">
+            <button type="button" data-chart-years="0" aria-pressed="false">All</button>
+            <button type="button" data-chart-years="10" aria-pressed="true">10y</button>
+            <button type="button" data-chart-years="5" aria-pressed="false">5y</button>
+            <button type="button" data-chart-years="3" aria-pressed="false">3y</button>
+            <button type="button" data-chart-years="1" aria-pressed="false">1y</button>
+          </div>
+          <span id="chartRangeSummary" class="muted"></span>
+        </div>
+        <div id="overviewLoadState" class="source-summary pending" aria-live="polite">Loading data...</div>
+        <div class="chart-wrap">
+          <canvas id="historyChart" width="1600" height="520" aria-label="Historical Fear and Greed score chart"></canvas>
+          <div id="chartTooltip" class="chart-tooltip" role="tooltip"></div>
+        </div>
+        <div class="legend">
+          <span class="legend-item"><span class="swatch line"></span>Fear & Greed score</span>
+          <span class="legend-item"><span class="swatch spy"></span><span id="marketLegendLabel">Market price</span></span>
+          <span class="legend-item"><span class="swatch period"></span>Signal active period</span>
+          <span class="legend-item"><span class="swatch marker"></span><span id="marketMarkerLabel">Signal start on market price</span></span>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-signal" class="tab-panel" role="tabpanel" aria-labelledby="tab-signal" data-panel="signal" hidden>
+      <div class="card">
+        <h2>Signal</h2>
+        <div id="status" class="status ok">No data yet.</div>
+        <p id="explanation" class="muted"></p>
+        <div class="metric-grid">
+          <div class="metric">
+            <span class="metric-label">Latest score</span>
+            <span id="latestScore" class="metric-value">-</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Rows</span>
+            <span id="rowCount" class="metric-value">-</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Coverage</span>
+            <span id="dateRange" class="metric-value">-</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Signal starts</span>
+            <span id="opportunityCount" class="metric-value">-</span>
+          </div>
+        </div>
+        <h3>Projected returns</h3>
+        <p id="signalProjectionSummary" class="muted"></p>
+        <div id="signalProjectionWrap" class="table-scroll"></div>
+        <div class="row signal-actions">
+          <button id="refreshBtn" class="primary" type="button">Refresh now</button>
+          <button id="clearBtn" class="danger" type="button">Clear local history</button>
+        </div>
+        <p id="fetchMsg" class="muted" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section id="panel-criteria" class="tab-panel" role="tabpanel" aria-labelledby="tab-criteria" data-panel="criteria" hidden>
+      <div class="card">
+        <h2>Settings</h2>
+        <div class="setting-section">
+          <h3>Signal criteria</h3>
+          <p class="muted">
+            A row is marked as an opportunity signal when any enabled condition is true.
+          </p>
+          <div class="criteria-grid">
+            <div class="criterion">
+              <label class="criterion-title">
+                <input id="lowScoreEnabled" type="checkbox">
+                Score floor
+              </label>
+              <div class="criterion-fields">
+                <label class="compact">Score <= <input id="lowScoreThreshold" type="number" min="0" max="100" step="1"></label>
+                <label class="compact">for <input id="lowScoreDays" type="number" min="1" max="30" step="1"> saved rows</label>
+              </div>
+            </div>
+            <div class="criterion">
+              <label class="criterion-title">
+                <input id="sustainedScoreEnabled" type="checkbox">
+                Sustained floor
+              </label>
+              <div class="criterion-fields">
+                <label class="compact">Score <= <input id="sustainedScoreThreshold" type="number" min="0" max="100" step="1"></label>
+                <label class="compact">for <input id="sustainedScoreDays" type="number" min="1" max="30" step="1"> saved rows</label>
+              </div>
+            </div>
+            <div class="criterion">
+              <label class="criterion-title">
+                <input id="vixHighEnabled" type="checkbox">
+                VIX spike
+              </label>
+              <div class="criterion-fields">
+                <label class="compact">VIX >= <input id="vixHighThreshold" type="number" min="0" max="100" step="1"></label>
+                <label class="compact">for <input id="vixHighDays" type="number" min="1" max="30" step="1"> saved rows</label>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <button id="saveCriteriaBtn" class="primary" type="button">Save criteria</button>
+            <button id="resetCriteriaBtn" type="button">Reset defaults</button>
+          </div>
+          <p id="criteriaSummary" class="muted"></p>
+          <p class="muted">
+            "Signal start" is true only on the first row where the opportunity condition turns on after being off on the prior saved row. Fear & Greed rules use only aggregate score values; CNN sub-indicator series are ignored.
+          </p>
+        </div>
+
+        <div class="setting-section">
+          <h3>Market ticker</h3>
+          <div class="row">
+            <label class="compact">Preset
+              <select id="marketTickerPreset">
+                <option value="SPY">SPY</option>
+                <option value="QQQ">QQQ</option>
+                <option value="TQQQ">TQQQ</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <label class="compact flex-input" for="marketTickerInput">Ticker <input id="marketTickerInput" class="wide-input" type="text" maxlength="24" spellcheck="false" placeholder="SPY"></label>
+            <button id="saveMarketTickerBtn" class="primary" type="button">Save ticker</button>
+            <button id="resetMarketTickerBtn" type="button">Reset SPY</button>
+          </div>
+          <p id="marketTickerSummary" class="muted"></p>
+        </div>
+
+        <div class="setting-section">
+          <h3>Return checkpoints</h3>
+          <div class="row">
+            <label class="compact flex-input" for="checkpointMonthsInput">Months <input id="checkpointMonthsInput" class="wide-input" type="text" placeholder="3, 6, 12"></label>
+            <button id="saveCheckpointsBtn" class="primary" type="button">Save checkpoints</button>
+            <button id="resetCheckpointsBtn" type="button">Reset default</button>
+          </div>
+          <p id="checkpointSummary" class="muted"></p>
+        </div>
+
+        <div class="setting-section">
+          <h3>Optimizer cadence</h3>
+          <div class="row">
+            <label class="compact">Target/year from <input id="optimizerTargetMin" type="number" min="0" max="20" step="0.1"></label>
+            <label class="compact">to <input id="optimizerTargetMax" type="number" min="0" max="20" step="0.1"></label>
+            <label class="compact">recent years <input id="optimizerRecentYears" type="number" min="1" max="30" step="1"></label>
+            <button id="saveOptimizerSettingsBtn" class="primary" type="button">Save cadence</button>
+            <button id="resetOptimizerSettingsBtn" type="button">Reset cadence</button>
+          </div>
+          <p id="optimizerSettingsSummary" class="muted"></p>
+        </div>
+
+        <div class="setting-section">
+          <h3>Storage</h3>
+          <div class="row">
+            <button id="resetAppBtn" class="danger" type="button">Reset app data</button>
+          </div>
+          <p class="muted">Removes all local storage for this page and refreshes.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-optimizer" class="tab-panel" role="tabpanel" aria-labelledby="tab-optimizer" data-panel="optimizer" hidden>
+      <div class="card optimizer-card">
+        <h2>Optimizer</h2>
+        <p class="muted">
+          Tests candidate Fear & Greed and VIX thresholds against the saved return checkpoints. Ranking rewards higher average returns, higher win rate, smaller average and worst losses, fewer losing forward-return observations, and fit to the target signal cadence. It also estimates the best percent of remaining cash to deploy on each active signal day within each contiguous signal period. Use Apply on any row to choose the tradeoff you prefer.
+        </p>
+        <div class="row">
+          <button id="runOptimizerBtn" class="primary" type="button">Run optimizer</button>
+        </div>
+        <div id="optimizerProgressWrap" class="progress-row" hidden>
+          <progress id="optimizerProgress" max="100" value="0"></progress>
+          <span id="optimizerProgressText" class="muted">0%</span>
+        </div>
+        <p id="optimizerSummary" class="muted"></p>
+        <div id="optimizerWrap" class="table-scroll"></div>
+      </div>
+    </section>
+
+    <section id="panel-returns" class="tab-panel" role="tabpanel" aria-labelledby="tab-returns" data-panel="returns" hidden>
+      <div class="card">
+        <h2>Forward returns</h2>
+        <p id="returnsIntro" class="muted">
+          Selected ticker returns after each signal start. Exit dates use the first available selected-ticker trading day on or after each target date.
+        </p>
+        <div id="returnsWrap" class="table-scroll"></div>
+      </div>
+    </section>
+
+    <section id="panel-history" class="tab-panel" role="tabpanel" aria-labelledby="tab-history" data-panel="history" hidden>
+      <div class="card">
+        <h2>History</h2>
+        <p class="muted">
+          "Signal start" is true only on the first saved row where the opportunity condition turns on, so old windows do not keep alerting forever.
+        </p>
+        <div id="tableWrap" class="table-scroll"></div>
+      </div>
+    </section>
+
+    <section id="panel-sources" class="tab-panel" role="tabpanel" aria-labelledby="tab-sources" data-panel="sources" hidden>
+      <div class="card">
+        <h2>Sources</h2>
+        <h3>Data status</h3>
+        <div id="sourceStatusSummary" class="source-summary pending">Checking saved data and source coverage...</div>
+        <div id="sourceStatusWrap" class="table-scroll"></div>
+        <p class="muted">
+          Long history is loaded from the canonical <code>fear-greed.csv</code> in <code>whit3rabbit/fear-greed-data</code>, then the live CNN endpoint is merged in for the latest available tail.
+        </p>
+        <p id="marketSourceText" class="muted">
+          Selected ticker daily close values are loaded automatically from Yahoo Finance's chart endpoint through a browser-readable text proxy. VIX close values are loaded from the datasets/finance-vix daily CSV and can be used by the editable signal criteria.
+        </p>
+        <p class="muted">
+          The repository notes that older combined Fear & Greed CSVs have been superseded by <code>fear-greed.csv</code>. This app therefore lets the canonical file and live CNN endpoint win for sentiment values while using Yahoo and datasets/finance-vix only for market context.
+        </p>
+      </div>
+    </section>
+  </div>
+  </div>
+
+<script>
+const STORAGE_KEY = "contrarianOpportunityRadar.history.v1";
+const SPY_STORAGE_KEY = "contrarianOpportunityRadar.spy.v1";
+const MARKET_SERIES_STORAGE_KEY = "contrarianOpportunityRadar.marketSeries.v1";
+const MARKET_TICKER_STORAGE_KEY = "contrarianOpportunityRadar.marketTicker.v1";
+const CRITERIA_STORAGE_KEY = "contrarianOpportunityRadar.criteria.v1";
+const CHECKPOINTS_STORAGE_KEY = "contrarianOpportunityRadar.returnCheckpoints.v1";
+const OPTIMIZER_SETTINGS_STORAGE_KEY = "contrarianOpportunityRadar.optimizerSettings.v1";
+const CHART_RANGE_STORAGE_KEY = "contrarianOpportunityRadar.chartRange.v1";
+const LEGACY_STORAGE_KEYS = ["marketPanicTripwire.history.v1", "cnnFearGreedHistory.v2"];
+const APP_STORAGE_KEYS = Object.freeze([
+  STORAGE_KEY,
+  SPY_STORAGE_KEY,
+  MARKET_SERIES_STORAGE_KEY,
+  MARKET_TICKER_STORAGE_KEY,
+  CRITERIA_STORAGE_KEY,
+  CHECKPOINTS_STORAGE_KEY,
+  OPTIMIZER_SETTINGS_STORAGE_KEY,
+  CHART_RANGE_STORAGE_KEY,
+  ...LEGACY_STORAGE_KEYS
+]);
+const HISTORICAL_DATA_ENDPOINT = "https://raw.githubusercontent.com/whit3rabbit/fear-greed-data/main/fear-greed.csv";
+const DEFAULT_MARKET_TICKER = "SPY";
+const MARKET_TICKER_PRESETS = Object.freeze(["SPY", "QQQ", "TQQQ"]);
+const YAHOO_CHART_PERIOD1 = 728317800;
+const YAHOO_CHART_PERIOD2 = 9999999999;
+const VIX_DATA_ENDPOINT = "https://raw.githubusercontent.com/datasets/finance-vix/main/data/vix-daily.csv";
+const CNN_ENDPOINT = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata";
+const CORS_PROXY_ENDPOINT = "https://api.allorigins.win/raw?url=";
+const DEPRECATED_SENTIMENT_SOURCES = new Set(["history:spy-combined"]);
+const $ = (id) => document.getElementById(id);
+const LEGACY_DEFAULT_CRITERIA = Object.freeze({
+  lowScore: { enabled: true, threshold: 10, days: 2 },
+  sustainedScore: { enabled: true, threshold: 15, days: 5 },
+  vixHigh: { enabled: true, threshold: 35, days: 1 }
+});
+const PRIOR_OPTIMIZED_DEFAULT_CRITERIA = Object.freeze({
+  lowScore: { enabled: true, threshold: 5, days: 3 },
+  sustainedScore: { enabled: true, threshold: 10, days: 10 },
+  vixHigh: { enabled: true, threshold: 40, days: 2 }
+});
+const PRIOR_BALANCED_DEFAULT_CRITERIA = Object.freeze({
+  lowScore: { enabled: true, threshold: 5, days: 1 },
+  sustainedScore: { enabled: true, threshold: 10, days: 5 },
+  vixHigh: { enabled: true, threshold: 40, days: 1 }
+});
+const DEFAULT_CRITERIA = Object.freeze({
+  lowScore: { enabled: true, threshold: 5, days: 3 },
+  sustainedScore: { enabled: true, threshold: 20, days: 5 },
+  vixHigh: { enabled: true, threshold: 35, days: 1 }
+});
+const PRIOR_DEFAULT_RETURN_CHECKPOINTS = Object.freeze([1, 3, 6, 12]);
+const DEFAULT_RETURN_CHECKPOINTS = Object.freeze([3, 6, 12]);
+const SIGNAL_PROJECTION_CHECKPOINTS = Object.freeze([1, 3, 6, 12]);
+const CHART_RANGE_OPTIONS = Object.freeze([0, 10, 5, 3, 1]);
+const DEFAULT_CHART_RANGE_YEARS = 10;
+const NARROW_CHART_RANGE_YEARS = 1;
+const NARROW_CHART_RANGE_QUERY = "(max-width: 760px)";
+const PRIOR_DEFAULT_OPTIMIZER_SETTINGS = Object.freeze({
+  targetMinPerYear: 2,
+  targetMaxPerYear: 3,
+  recentYears: 6
+});
+const DEFAULT_OPTIMIZER_SETTINGS = Object.freeze({
+  targetMinPerYear: 2,
+  targetMaxPerYear: 4,
+  recentYears: 7
+});
+const DEFAULT_MIGRATION_CRITERIA = Object.freeze([
+  LEGACY_DEFAULT_CRITERIA,
+  PRIOR_OPTIMIZED_DEFAULT_CRITERIA,
+  PRIOR_BALANCED_DEFAULT_CRITERIA
+]);
+let optimizerResults = [];
+let optimizerWorkers = [];
+let optimizerRunId = 0;
+let optimizerBusy = false;
+let dataFetchInProgress = false;
+let dataFetchAttempted = false;
+let lastFetchError = "";
+let chartHoverMarkers = [];
+const sourceFetchStatus = {};
+
+function todayLocalISODate() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+
+function parseDateish(x) {
+  if (typeof x === "number") {
+    const ms = x > 1e12 ? x : x * 1000;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+  }
+
+  const s = String(x ?? "").trim();
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) {
+    return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
+  }
+
+  const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mdy) {
+    return `${mdy[3]}-${mdy[1].padStart(2, "0")}-${mdy[2].padStart(2, "0")}`;
+  }
+
+  if (/^\d+(\.\d+)?$/.test(s)) {
+    return parseDateish(Number(s));
+  }
+
+  const d = new Date(String(x));
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+      || LEGACY_STORAGE_KEYS.map(key => localStorage.getItem(key)).find(Boolean);
+    const rows = raw ? JSON.parse(raw) : [];
+    return normalizeRows(rows);
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(rows) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeRows(rows)));
+}
+
+function normalizeMarketTicker(value) {
+  const ticker = String(value || "").trim().toUpperCase().replace(/\s+/g, "");
+  return /^[A-Z0-9.^=_-]{1,24}$/.test(ticker) ? ticker : DEFAULT_MARKET_TICKER;
+}
+
+function parseMarketTickerInput(value) {
+  const ticker = String(value || "").trim().toUpperCase().replace(/\s+/g, "");
+  if (!/^[A-Z0-9.^=_-]{1,24}$/.test(ticker)) {
+    throw new Error("Use 1-24 Yahoo ticker characters: letters, numbers, dot, dash, caret, equals, or underscore.");
+  }
+  return ticker;
+}
+
+function loadMarketTicker() {
+  try {
+    return normalizeMarketTicker(localStorage.getItem(MARKET_TICKER_STORAGE_KEY) || DEFAULT_MARKET_TICKER);
+  } catch {
+    return DEFAULT_MARKET_TICKER;
+  }
+}
+
+function saveMarketTicker(ticker) {
+  localStorage.setItem(MARKET_TICKER_STORAGE_KEY, parseMarketTickerInput(ticker));
+}
+
+function loadMarketSeriesCache() {
+  try {
+    const raw = localStorage.getItem(MARKET_SERIES_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveMarketSeriesCache(cache) {
+  localStorage.setItem(MARKET_SERIES_STORAGE_KEY, JSON.stringify(cache || {}));
+}
+
+function loadSpySeries(ticker = loadMarketTicker()) {
+  const marketTicker = normalizeMarketTicker(ticker);
+  try {
+    const cache = loadMarketSeriesCache();
+    const cachedRows = normalizeSpyRows(cache[marketTicker] || []);
+    if (cachedRows.length) return cachedRows;
+
+    if (marketTicker === DEFAULT_MARKET_TICKER) {
+      const legacyRaw = localStorage.getItem(SPY_STORAGE_KEY);
+      const legacyRows = normalizeSpyRows(legacyRaw ? JSON.parse(legacyRaw) : []);
+      if (legacyRows.length) {
+        saveSpySeries(legacyRows, marketTicker);
+        return legacyRows;
+      }
+    }
+
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+function saveSpySeries(rows, ticker = loadMarketTicker()) {
+  const marketTicker = normalizeMarketTicker(ticker);
+  const cache = loadMarketSeriesCache();
+  cache[marketTicker] = normalizeSpyRows(rows);
+  saveMarketSeriesCache(cache);
+}
+
+function normalizeSpyRows(rows) {
+  const byDate = new Map();
+  for (const row of rows || []) {
+    const date = String(row.date || "").slice(0, 10);
+    const spy = row.spy === "" || row.spy == null ? null : Number(row.spy);
+    if (date && Number.isFinite(spy) && spy > 0) {
+      byDate.set(date, { date, spy });
+    }
+  }
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function attachMarketSeries(rows, marketSeries = loadSpySeries()) {
+  const marketByDate = new Map(normalizeSpyRows(marketSeries).map(row => [row.date, row.spy]));
+  return (rows || []).map(row => ({
+    ...row,
+    spy: marketByDate.has(row.date) ? marketByDate.get(row.date) : null
+  }));
+}
+
+function loadCriteria() {
+  try {
+    const raw = localStorage.getItem(CRITERIA_STORAGE_KEY);
+    if (!raw) return normalizeCriteria(DEFAULT_CRITERIA);
+
+    const saved = normalizeCriteria(JSON.parse(raw));
+    if (DEFAULT_MIGRATION_CRITERIA.some(criteria => criteriaEqual(saved, criteria))) {
+      saveCriteria(DEFAULT_CRITERIA);
+      return normalizeCriteria(DEFAULT_CRITERIA);
+    }
+
+    return saved;
+  } catch {
+    return normalizeCriteria(DEFAULT_CRITERIA);
+  }
+}
+
+function saveCriteria(criteria) {
+  localStorage.setItem(CRITERIA_STORAGE_KEY, JSON.stringify(normalizeCriteria(criteria)));
+}
+
+function loadReturnCheckpoints() {
+  try {
+    const raw = localStorage.getItem(CHECKPOINTS_STORAGE_KEY);
+    if (!raw) return [...DEFAULT_RETURN_CHECKPOINTS];
+
+    const saved = normalizeReturnCheckpoints(JSON.parse(raw));
+    if (returnCheckpointsEqual(saved, PRIOR_DEFAULT_RETURN_CHECKPOINTS)) {
+      saveReturnCheckpoints(DEFAULT_RETURN_CHECKPOINTS);
+      return [...DEFAULT_RETURN_CHECKPOINTS];
+    }
+
+    return saved;
+  } catch {
+    return [...DEFAULT_RETURN_CHECKPOINTS];
+  }
+}
+
+function saveReturnCheckpoints(months) {
+  localStorage.setItem(CHECKPOINTS_STORAGE_KEY, JSON.stringify(normalizeReturnCheckpoints(months)));
+}
+
+function returnCheckpointsEqual(a, b) {
+  const left = normalizeReturnCheckpoints(a);
+  const right = normalizeReturnCheckpoints(b);
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function loadOptimizerSettings() {
+  try {
+    const raw = localStorage.getItem(OPTIMIZER_SETTINGS_STORAGE_KEY);
+    if (!raw) return normalizeOptimizerSettings(DEFAULT_OPTIMIZER_SETTINGS);
+
+    const saved = normalizeOptimizerSettings(JSON.parse(raw));
+    if (optimizerSettingsEqual(saved, PRIOR_DEFAULT_OPTIMIZER_SETTINGS)) {
+      saveOptimizerSettings(DEFAULT_OPTIMIZER_SETTINGS);
+      return normalizeOptimizerSettings(DEFAULT_OPTIMIZER_SETTINGS);
+    }
+
+    return saved;
+  } catch {
+    return normalizeOptimizerSettings(DEFAULT_OPTIMIZER_SETTINGS);
+  }
+}
+
+function saveOptimizerSettings(settings) {
+  localStorage.setItem(OPTIMIZER_SETTINGS_STORAGE_KEY, JSON.stringify(normalizeOptimizerSettings(settings)));
+}
+
+function optimizerSettingsEqual(a, b) {
+  const left = normalizeOptimizerSettings(a);
+  const right = normalizeOptimizerSettings(b);
+  return left.targetMinPerYear === right.targetMinPerYear
+    && left.targetMaxPerYear === right.targetMaxPerYear
+    && left.recentYears === right.recentYears;
+}
+
+function loadChartRangeYears() {
+  try {
+    const raw = localStorage.getItem(CHART_RANGE_STORAGE_KEY);
+    return raw == null ? getDefaultChartRangeYears() : normalizeChartRangeYears(raw);
+  } catch {
+    return getDefaultChartRangeYears();
+  }
+}
+
+function saveChartRangeYears(years) {
+  localStorage.setItem(CHART_RANGE_STORAGE_KEY, String(normalizeChartRangeYears(years)));
+}
+
+function normalizeChartRangeYears(years) {
+  const value = Number(years);
+  return CHART_RANGE_OPTIONS.includes(value) ? value : getDefaultChartRangeYears();
+}
+
+function getDefaultChartRangeYears() {
+  if (typeof window === "undefined") return DEFAULT_CHART_RANGE_YEARS;
+  if (window.matchMedia) {
+    return window.matchMedia(NARROW_CHART_RANGE_QUERY).matches
+      ? NARROW_CHART_RANGE_YEARS
+      : DEFAULT_CHART_RANGE_YEARS;
+  }
+  return window.innerWidth <= 760 ? NARROW_CHART_RANGE_YEARS : DEFAULT_CHART_RANGE_YEARS;
+}
+
+function normalizeOptimizerSettings(settings) {
+  const source = settings || {};
+  let targetMinPerYear = clampNumber(source.targetMinPerYear, 0, 20, DEFAULT_OPTIMIZER_SETTINGS.targetMinPerYear);
+  let targetMaxPerYear = clampNumber(source.targetMaxPerYear, 0, 20, DEFAULT_OPTIMIZER_SETTINGS.targetMaxPerYear);
+  const recentYears = clampInteger(source.recentYears, 1, 30, DEFAULT_OPTIMIZER_SETTINGS.recentYears);
+
+  if (targetMinPerYear > targetMaxPerYear) {
+    [targetMinPerYear, targetMaxPerYear] = [targetMaxPerYear, targetMinPerYear];
+  }
+
+  return { targetMinPerYear, targetMaxPerYear, recentYears };
+}
+
+function normalizeReturnCheckpoints(values) {
+  const source = Array.isArray(values) ? values : [];
+  const unique = new Set();
+
+  for (const value of source) {
+    const months = Number(value);
+    if (Number.isInteger(months) && months >= 1 && months <= 120) {
+      unique.add(months);
+    }
+  }
+
+  const checkpoints = [...unique].sort((a, b) => a - b).slice(0, 12);
+  return checkpoints.length ? checkpoints : [...DEFAULT_RETURN_CHECKPOINTS];
+}
+
+function parseReturnCheckpointsInput(text) {
+  const parts = String(text || "").split(/[,\s]+/).map(part => part.trim()).filter(Boolean);
+  if (!parts.length) {
+    throw new Error("Enter at least one month value.");
+  }
+  if (parts.length > 12) {
+    throw new Error("Use 12 checkpoints or fewer.");
+  }
+
+  const months = [];
+  for (const part of parts) {
+    const value = Number(part);
+    if (!Number.isInteger(value) || value < 1 || value > 120) {
+      throw new Error(`Invalid checkpoint "${part}". Use whole months from 1 to 120.`);
+    }
+    months.push(value);
+  }
+
+  return normalizeReturnCheckpoints(months);
+}
+
+function normalizeCriteria(criteria) {
+  const source = criteria || {};
+  return {
+    lowScore: {
+      enabled: Boolean(source.lowScore?.enabled ?? DEFAULT_CRITERIA.lowScore.enabled),
+      threshold: clampNumber(source.lowScore?.threshold, 0, 100, DEFAULT_CRITERIA.lowScore.threshold),
+      days: clampInteger(source.lowScore?.days, 1, 30, DEFAULT_CRITERIA.lowScore.days)
+    },
+    sustainedScore: {
+      enabled: Boolean(source.sustainedScore?.enabled ?? DEFAULT_CRITERIA.sustainedScore.enabled),
+      threshold: clampNumber(source.sustainedScore?.threshold, 0, 100, DEFAULT_CRITERIA.sustainedScore.threshold),
+      days: clampInteger(source.sustainedScore?.days, 1, 30, DEFAULT_CRITERIA.sustainedScore.days)
+    },
+    vixHigh: {
+      enabled: Boolean(source.vixHigh?.enabled ?? DEFAULT_CRITERIA.vixHigh.enabled),
+      threshold: clampNumber(source.vixHigh?.threshold, 0, 100, DEFAULT_CRITERIA.vixHigh.threshold),
+      days: clampInteger(source.vixHigh?.days, 1, 30, DEFAULT_CRITERIA.vixHigh.days)
+    }
+  };
+}
+
+function criteriaEqual(a, b) {
+  const ca = normalizeCriteria(a);
+  const cb = normalizeCriteria(b);
+  return ca.lowScore.enabled === cb.lowScore.enabled
+    && ca.lowScore.threshold === cb.lowScore.threshold
+    && ca.lowScore.days === cb.lowScore.days
+    && ca.sustainedScore.enabled === cb.sustainedScore.enabled
+    && ca.sustainedScore.threshold === cb.sustainedScore.threshold
+    && ca.sustainedScore.days === cb.sustainedScore.days
+    && ca.vixHigh.enabled === cb.vixHigh.enabled
+    && ca.vixHigh.threshold === cb.vixHigh.threshold
+    && ca.vixHigh.days === cb.vixHigh.days;
+}
+
+function clampNumber(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+function clampInteger(value, min, max, fallback) {
+  return Math.round(clampNumber(value, min, max, fallback));
+}
+
+function normalizeRows(rows) {
+  const byDate = new Map();
+
+  for (const r of rows || []) {
+    const date = String(r.date || "").slice(0, 10);
+    const value = Number(r.value);
+    const vix = r.vix === "" || r.vix == null ? null : Number(r.vix);
+    const existing = byDate.get(date);
+
+    if (DEPRECATED_SENTIMENT_SOURCES.has(r.source)) continue;
+    if (!date || Number.isNaN(value) || value < 0 || value > 100) continue;
+
+    byDate.set(date, {
+      date,
+      value,
+      vix: vix == null || Number.isNaN(vix) ? existing?.vix ?? null : vix,
+      source: r.source || existing?.source || "local"
+    });
+  }
+
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// Correct parser: do NOT scan recursively.
+// Only use CNN's aggregate Fear & Greed fields.
+function parseCnnFearGreedPayload(payload) {
+  const rows = [];
+
+  const hist = payload?.fear_and_greed_historical?.data;
+  if (Array.isArray(hist)) {
+    for (const point of hist) {
+      const date = parseDateish(point.x);
+      const value = Number(point.y);
+      if (date && !Number.isNaN(value) && value >= 0 && value <= 100) {
+        rows.push({ date, value, source: "cnn:fear_and_greed_historical" });
+      }
+    }
+  }
+
+  const current = payload?.fear_and_greed;
+  if (current && current.score != null) {
+    const date = parseDateish(current.timestamp) || todayLocalISODate();
+    const value = Number(current.score);
+    if (date && !Number.isNaN(value) && value >= 0 && value <= 100) {
+      rows.push({ date, value, source: "cnn:fear_and_greed.score" });
+    }
+  }
+
+  if (!rows.length) {
+    throw new Error("Could not find fear_and_greed.score or fear_and_greed_historical.data.");
+  }
+
+  return normalizeRows(rows);
+}
+
+function parseCsvLine(line) {
+  const cells = [];
+  let cell = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    const next = line[i + 1];
+
+    if (ch === "\"" && inQuotes && next === "\"") {
+      cell += "\"";
+      i++;
+    } else if (ch === "\"") {
+      inQuotes = !inQuotes;
+    } else if (ch === "," && !inQuotes) {
+      cells.push(cell);
+      cell = "";
+    } else {
+      cell += ch;
+    }
+  }
+
+  cells.push(cell);
+  return cells.map(value => value.trim());
+}
+
+function normalizeHeader(header) {
+  return header.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function parseHistoricalCsv(text, source = "history:whit3rabbit") {
+  const lines = text.trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) {
+    throw new Error("historical CSV is empty");
+  }
+
+  const headers = parseCsvLine(lines[0]).map(normalizeHeader);
+  const dateIndex = headers.findIndex(header => header === "date");
+  const valueIndex = headers.findIndex(header =>
+    ["feargreed", "fearandgreed", "score", "value", "feargreedscore"].includes(header)
+  );
+  const vixIndex = headers.findIndex(header =>
+    ["closevix", "adjclosevix", "vix", "vixclose"].includes(header)
+  );
+
+  if (dateIndex < 0 || valueIndex < 0) {
+    throw new Error("historical CSV must include date and Fear Greed columns");
+  }
+
+  const rows = [];
+  for (const line of lines.slice(1)) {
+    const cells = parseCsvLine(line);
+    const date = parseDateish(cells[dateIndex]);
+    const value = Number(cells[valueIndex]);
+    const vixRaw = vixIndex < 0 ? "" : cells[vixIndex];
+    const vix = vixRaw === "" ? null : Number(vixRaw);
+    if (date && !Number.isNaN(value) && value >= 0 && value <= 100) {
+      rows.push({
+        date,
+        value,
+        vix: Number.isNaN(vix) ? null : vix,
+        source
+      });
+    }
+  }
+
+  if (!rows.length) {
+    throw new Error("historical CSV did not contain usable rows");
+  }
+
+  return normalizeRows(rows);
+}
+
+function parseVixCsv(text, source = "vix:datasets-finance-vix") {
+  const lines = text.trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) {
+    throw new Error("VIX CSV is empty");
+  }
+
+  const headers = parseCsvLine(lines[0]).map(normalizeHeader);
+  const dateIndex = headers.findIndex(header => ["date", "observationdate"].includes(header));
+  const closeIndex = headers.findIndex(header => ["close", "vix", "vixclose", "vixcls"].includes(header));
+
+  if (dateIndex < 0 || closeIndex < 0) {
+    throw new Error("VIX CSV must include a date column and Close values");
+  }
+
+  const rows = [];
+  for (const line of lines.slice(1)) {
+    const cells = parseCsvLine(line);
+    const date = parseDateish(cells[dateIndex]);
+    const close = Number(cells[closeIndex]);
+    if (date && Number.isFinite(close) && close > 0) {
+      rows.push({ date, vix: close, source });
+    }
+  }
+
+  if (!rows.length) {
+    throw new Error("VIX CSV did not contain usable rows");
+  }
+
+  return rows.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function buildYahooChartEndpoint(ticker = loadMarketTicker()) {
+  const symbol = encodeURIComponent(normalizeMarketTicker(ticker));
+  return `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&period1=${YAHOO_CHART_PERIOD1}&period2=${YAHOO_CHART_PERIOD2}`;
+}
+
+function buildYahooReaderEndpoint(endpoint) {
+  return `https://r.jina.ai/${endpoint}`;
+}
+
+function parseYahooMarketChart(payload, ticker = loadMarketTicker()) {
+  const marketTicker = normalizeMarketTicker(ticker);
+  const error = payload?.chart?.error;
+  if (error) {
+    throw new Error(error.description || error.code || "Yahoo chart returned an error");
+  }
+
+  const result = payload?.chart?.result?.[0];
+  const timestamps = Array.isArray(result?.timestamp) ? result.timestamp : [];
+  const closeValues = result?.indicators?.quote?.[0]?.close;
+  if (!timestamps.length || !Array.isArray(closeValues)) {
+    throw new Error(`Yahoo ${marketTicker} chart payload did not include timestamp and close arrays`);
+  }
+
+  const rows = [];
+  for (let index = 0; index < timestamps.length; index++) {
+    const date = parseDateish(timestamps[index]);
+    const spy = Number(closeValues[index]);
+    if (date && Number.isFinite(spy) && spy > 0) {
+      rows.push({ date, spy, source: `market:yahoo-chart:${marketTicker}` });
+    }
+  }
+
+  if (!rows.length) {
+    throw new Error(`Yahoo ${marketTicker} chart payload did not contain usable close values`);
+  }
+
+  return rows.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function saveFetchedRows(newRows, newSpyRows = [], newVixRows = [], marketTicker = loadMarketTicker()) {
+  const existing = loadHistory();
+  const spyByDate = new Map();
+  const vixByDate = new Map();
+  for (const row of loadSpySeries(marketTicker)) {
+    const date = String(row.date || "").slice(0, 10);
+    const spy = row.spy === "" || row.spy == null ? null : Number(row.spy);
+    if (date && Number.isFinite(spy) && spy > 0) {
+      spyByDate.set(date, spy);
+    }
+  }
+  for (const row of [...existing, ...newRows]) {
+    const date = String(row.date || "").slice(0, 10);
+    const vix = row.vix === "" || row.vix == null ? null : Number(row.vix);
+    if (date && Number.isFinite(vix) && vix > 0) {
+      vixByDate.set(date, vix);
+    }
+  }
+  for (const row of newSpyRows) {
+    const date = String(row.date || "").slice(0, 10);
+    const spy = row.spy === "" || row.spy == null ? null : Number(row.spy);
+    if (date && Number.isFinite(spy) && spy > 0) {
+      spyByDate.set(date, spy);
+    }
+  }
+  for (const row of newVixRows) {
+    const date = String(row.date || "").slice(0, 10);
+    const vix = row.vix === "" || row.vix == null ? null : Number(row.vix);
+    if (date && Number.isFinite(vix) && vix > 0) {
+      vixByDate.set(date, vix);
+    }
+  }
+
+  saveSpySeries([...spyByDate].map(([date, spy]) => ({ date, spy })), marketTicker);
+
+  const merged = normalizeRows([...existing, ...newRows]).map(r => ({
+    ...r,
+    vix: vixByDate.has(r.date) ? vixByDate.get(r.date) : r.vix
+  }));
+
+  saveHistory(merged);
+  render();
+  return merged;
+}
+
+function addRollingFlags(rows, criteria = loadCriteria()) {
+  const activeCriteria = normalizeCriteria(criteria);
+  const flagged = rows.map((r, i) => {
+    const lastLowScore = rows.slice(Math.max(0, i - activeCriteria.lowScore.days + 1), i + 1);
+    const lastSustainedScore = rows.slice(Math.max(0, i - activeCriteria.sustainedScore.days + 1), i + 1);
+    const lastVix = rows.slice(Math.max(0, i - activeCriteria.vixHigh.days + 1), i + 1);
+
+    const lowScore = activeCriteria.lowScore.enabled
+      && lastLowScore.length === activeCriteria.lowScore.days
+      && lastLowScore.every(x => x.value <= activeCriteria.lowScore.threshold);
+    const sustainedScore = activeCriteria.sustainedScore.enabled
+      && lastSustainedScore.length === activeCriteria.sustainedScore.days
+      && lastSustainedScore.every(x => x.value <= activeCriteria.sustainedScore.threshold);
+    const vixHigh = activeCriteria.vixHigh.enabled
+      && lastVix.length === activeCriteria.vixHigh.days
+      && lastVix.every(x => Number.isFinite(x.vix) && x.vix >= activeCriteria.vixHigh.threshold);
+
+    const reasons = [];
+    if (lowScore) reasons.push(`score <= ${formatNum(activeCriteria.lowScore.threshold)} for ${activeCriteria.lowScore.days} consecutive saved rows`);
+    if (sustainedScore) reasons.push(`score <= ${formatNum(activeCriteria.sustainedScore.threshold)} for ${activeCriteria.sustainedScore.days} consecutive saved rows`);
+    if (vixHigh) reasons.push(`VIX >= ${formatNum(activeCriteria.vixHigh.threshold)} for ${activeCriteria.vixHigh.days} consecutive saved rows`);
+
+    return {
+      ...r,
+      lowScore,
+      sustainedScore,
+      vixHigh,
+      opportunity: reasons.length > 0,
+      reasons
+    };
+  });
+
+  for (let i = 0; i < flagged.length; i++) {
+    flagged[i].opportunityStart = flagged[i].opportunity && (i === 0 || !flagged[i - 1].opportunity);
+  }
+
+  for (let i = 0; i < flagged.length; i++) {
+    if (!flagged[i].opportunityStart) continue;
+
+    let endIndex = i;
+    while (endIndex + 1 < flagged.length && flagged[endIndex + 1].opportunity) {
+      endIndex += 1;
+    }
+
+    const endRow = flagged[endIndex];
+    flagged[i].signalDurationDays = daysBetweenIso(flagged[i].date, endRow.date) + 1;
+    flagged[i].signalDurationRows = endIndex - i + 1;
+    flagged[i].signalEndDate = endRow.date;
+    flagged[i].signalStillActive = endIndex === flagged.length - 1 && endRow.opportunity;
+  }
+
+  return flagged;
+}
+
+function hasPendingDataFetch() {
+  return dataFetchInProgress || Object.values(sourceFetchStatus).some(status => status?.state === "pending");
+}
+
+function setFetchMessage(text) {
+  const msg = $("fetchMsg");
+  if (msg) msg.textContent = text;
+  renderOverviewLoadState(loadHistory());
+}
+
+function renderOverviewLoadState(rows = loadHistory()) {
+  const panel = $("overviewLoadState");
+  if (!panel) return;
+
+  const hasRows = Array.isArray(rows) && rows.length > 0;
+  const pending = hasPendingDataFetch();
+  if (hasRows && !pending && !lastFetchError) {
+    panel.hidden = true;
+    return;
+  }
+
+  panel.hidden = false;
+  if (pending) {
+    const marketTicker = loadMarketTicker();
+    panel.className = "source-summary pending";
+    panel.textContent = hasRows
+      ? "Refreshing market and sentiment data in the background..."
+      : `Loading historical sentiment, ${marketTicker}, and VIX data. First load can take a few seconds.`;
+    return;
+  }
+
+  if (lastFetchError && !hasRows) {
+    panel.className = "source-summary action";
+    panel.textContent = `Data load failed: ${lastFetchError}`;
+    return;
+  }
+
+  if (lastFetchError) {
+    panel.className = "source-summary warn";
+    panel.textContent = `Refresh warning: ${lastFetchError}`;
+    return;
+  }
+
+  panel.className = "source-summary pending";
+  panel.textContent = dataFetchAttempted
+    ? "No saved data is available yet."
+    : "Preparing data load...";
+}
+
+function render() {
+  const marketTicker = loadMarketTicker();
+  const rows = attachMarketSeries(loadHistory(), loadSpySeries(marketTicker));
+  const criteria = loadCriteria();
+  const checkpoints = loadReturnCheckpoints();
+  const optimizerSettings = loadOptimizerSettings();
+  const flagged = addRollingFlags(rows, criteria);
+  const latest = flagged[flagged.length - 1];
+
+  const status = $("status");
+  const explanation = $("explanation");
+
+  if (!latest) {
+    const marketTicker = loadMarketTicker();
+    status.textContent = hasPendingDataFetch() ? "Loading data..." : "No data yet.";
+    status.className = "status ok";
+    explanation.textContent = hasPendingDataFetch()
+      ? `Fetching historical sentiment, ${marketTicker}, VIX, and the live CNN tail.`
+      : `Use Refresh now to load historical sentiment, ${marketTicker}, VIX, and the live CNN tail.`;
+  } else if (latest.opportunity) {
+    status.textContent = `OPPORTUNITY WATCH active on ${latest.date}`;
+    status.className = "status opportunity";
+    explanation.textContent = `Trigger: ${latest.reasons.join("; ")}. Latest Fear & Greed value: ${formatNum(latest.value)}.`;
+  } else {
+    status.textContent = `No opportunity signal on ${latest.date}`;
+    status.className = "status ok";
+    explanation.textContent = `Latest Fear & Greed value: ${formatNum(latest.value)}.`;
+  }
+
+  updateSignalTabLabel(latest);
+
+  $("latestScore").textContent = latest ? formatNum(latest.value) : "-";
+  $("rowCount").textContent = rows.length ? rows.length.toLocaleString() : "-";
+  $("dateRange").textContent = rows.length ? `${rows[0].date} to ${rows[rows.length - 1].date}` : "-";
+  $("opportunityCount").textContent = flagged.length
+    ? flagged.filter(r => r.opportunityStart).length.toLocaleString()
+    : "-";
+  renderCriteriaControls(criteria);
+  renderMarketTickerControls(marketTicker);
+  renderCheckpointControls(checkpoints);
+  renderOptimizerSettingsControls(optimizerSettings);
+  renderSignalProjection(flagged, latest);
+  renderSourceStatus(rows);
+  renderOverviewLoadState(rows);
+
+  $("tableWrap").innerHTML = flagged.length
+    ? `<table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Fear & Greed</th>
+            <th>${escapeHtml(marketTicker)} price</th>
+            <th>VIX</th>
+            <th>Opportunity active?</th>
+            <th>Signal start?</th>
+            <th>Reason</th>
+            <th>Sentiment source</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${flagged.slice().reverse().map(r => `
+            <tr>
+              <td>${escapeHtml(r.date)}</td>
+              <td>${formatNum(r.value)}</td>
+              <td>${r.spy == null ? "" : formatCurrency(r.spy)}</td>
+              <td>${r.vix == null ? "" : formatNum(r.vix)}</td>
+              <td>${r.opportunity ? `<span class="pill">YES</span>` : "No"}</td>
+              <td>${r.opportunityStart ? `<span class="pill">YES</span>` : "No"}</td>
+              <td>${escapeHtml(r.reasons.join("; "))}</td>
+              <td>${escapeHtml(r.source || "")}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`
+    : `<p class="muted">No saved rows.</p>`;
+
+  renderReturnsTable(flagged, checkpoints);
+  drawOverviewChart(flagged, criteria);
+}
+
+function renderCriteriaControls(criteria) {
+  const c = normalizeCriteria(criteria);
+  const controls = {
+    lowScoreEnabled: c.lowScore.enabled,
+    lowScoreThreshold: c.lowScore.threshold,
+    lowScoreDays: c.lowScore.days,
+    sustainedScoreEnabled: c.sustainedScore.enabled,
+    sustainedScoreThreshold: c.sustainedScore.threshold,
+    sustainedScoreDays: c.sustainedScore.days,
+    vixHighEnabled: c.vixHigh.enabled,
+    vixHighThreshold: c.vixHigh.threshold,
+    vixHighDays: c.vixHigh.days
+  };
+
+  for (const [id, value] of Object.entries(controls)) {
+    const el = $(id);
+    if (!el) continue;
+    if (el.type === "checkbox") el.checked = Boolean(value);
+    else el.value = value;
+  }
+
+  const summary = $("criteriaSummary");
+  if (summary) summary.textContent = describeCriteria(c);
+}
+
+function readCriteriaControls() {
+  return normalizeCriteria({
+    lowScore: {
+      enabled: Boolean($("lowScoreEnabled")?.checked),
+      threshold: $("lowScoreThreshold")?.value,
+      days: $("lowScoreDays")?.value
+    },
+    sustainedScore: {
+      enabled: Boolean($("sustainedScoreEnabled")?.checked),
+      threshold: $("sustainedScoreThreshold")?.value,
+      days: $("sustainedScoreDays")?.value
+    },
+    vixHigh: {
+      enabled: Boolean($("vixHighEnabled")?.checked),
+      threshold: $("vixHighThreshold")?.value,
+      days: $("vixHighDays")?.value
+    }
+  });
+}
+
+function renderMarketTickerControls(ticker = loadMarketTicker()) {
+  const marketTicker = normalizeMarketTicker(ticker);
+  const preset = $("marketTickerPreset");
+  const input = $("marketTickerInput");
+  const summary = $("marketTickerSummary");
+  const legend = $("marketLegendLabel");
+  const marker = $("marketMarkerLabel");
+  const returnsIntro = $("returnsIntro");
+  const marketSourceText = $("marketSourceText");
+
+  if (preset) preset.value = MARKET_TICKER_PRESETS.includes(marketTicker) ? marketTicker : "custom";
+  if (input) input.value = marketTicker;
+  if (summary) {
+    summary.textContent = `Active ticker: ${marketTicker}. Used for the chart overlay, projected returns, forward returns, and optimizer calculations.`;
+  }
+  if (legend) legend.textContent = `${marketTicker} price`;
+  if (marker) marker.textContent = `Signal start on ${marketTicker}`;
+  if (returnsIntro) {
+    returnsIntro.textContent =
+      `${marketTicker} returns after each signal start. Exit dates use the first available ${marketTicker} trading day on or after each target date.`;
+  }
+  if (marketSourceText) {
+    marketSourceText.textContent =
+      `${marketTicker} daily close values are loaded automatically from Yahoo Finance's chart endpoint through a browser-readable text proxy. VIX close values are loaded from the datasets/finance-vix daily CSV and can be used by the editable signal criteria.`;
+  }
+}
+
+function readMarketTickerControls() {
+  const preset = $("marketTickerPreset")?.value;
+  const input = $("marketTickerInput")?.value;
+  if (preset && preset !== "custom" && !String(input || "").trim()) return preset;
+  const typed = parseMarketTickerInput(input);
+  return preset && preset !== "custom" && typed === preset ? preset : typed;
+}
+
+function renderCheckpointControls(checkpoints) {
+  const months = normalizeReturnCheckpoints(checkpoints);
+  const input = $("checkpointMonthsInput");
+  const summary = $("checkpointSummary");
+
+  if (input) input.value = months.join(", ");
+  if (summary) {
+    summary.textContent =
+      `Active checkpoints: ${formatCheckpointList(months)}. The optimizer uses these same horizons.`;
+  }
+}
+
+function renderOptimizerSettingsControls(settings) {
+  const s = normalizeOptimizerSettings(settings);
+  const minInput = $("optimizerTargetMin");
+  const maxInput = $("optimizerTargetMax");
+  const recentInput = $("optimizerRecentYears");
+  const summary = $("optimizerSettingsSummary");
+
+  if (minInput) minInput.value = s.targetMinPerYear;
+  if (maxInput) maxInput.value = s.targetMaxPerYear;
+  if (recentInput) recentInput.value = s.recentYears;
+  if (summary) {
+    summary.textContent =
+      `Cadence target: ${formatRateRange(s.targetMinPerYear, s.targetMaxPerYear)} overall and over the most recent ${s.recentYears} years.`;
+  }
+}
+
+function readOptimizerSettingsControls() {
+  return normalizeOptimizerSettings({
+    targetMinPerYear: $("optimizerTargetMin")?.value,
+    targetMaxPerYear: $("optimizerTargetMax")?.value,
+    recentYears: $("optimizerRecentYears")?.value
+  });
+}
+
+function formatCheckpointList(months) {
+  const labels = normalizeReturnCheckpoints(months).map(formatCheckpointLabel);
+  if (labels.length <= 1) return labels[0] || "";
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+}
+
+function formatCheckpointLabel(months) {
+  return `${months} month${months === 1 ? "" : "s"}`;
+}
+
+function formatCheckpointShort(months) {
+  return `${months}m`;
+}
+
+function describeCriteria(criteria) {
+  const c = normalizeCriteria(criteria);
+  const parts = [];
+  if (c.lowScore.enabled) parts.push(`score <= ${formatNum(c.lowScore.threshold)} for ${c.lowScore.days} saved rows`);
+  if (c.sustainedScore.enabled) parts.push(`score <= ${formatNum(c.sustainedScore.threshold)} for ${c.sustainedScore.days} saved rows`);
+  if (c.vixHigh.enabled) parts.push(`VIX >= ${formatNum(c.vixHigh.threshold)} for ${c.vixHigh.days} saved rows`);
+  return parts.length
+    ? `Active criteria: ${parts.join(" OR ")}.`
+    : "No criteria are enabled; no signal can trigger.";
+}
+
+function setSourceFetchStatus(key, status) {
+  sourceFetchStatus[key] = {
+    ...sourceFetchStatus[key],
+    ...status
+  };
+  renderOverviewLoadState(loadHistory());
+  renderSourceStatus(loadHistory());
+}
+
+function renderSourceStatus(rows = loadHistory()) {
+  const summary = $("sourceStatusSummary");
+  const wrap = $("sourceStatusWrap");
+  if (!summary || !wrap) return;
+
+  const sourceRows = buildSourceStatusRows(rows);
+  const actionRows = sourceRows.filter(row => row.state === "action");
+  const warnRows = sourceRows.filter(row => row.state === "warn");
+  const pendingRows = sourceRows.filter(row => row.state === "pending");
+
+  if (actionRows.length) {
+    summary.className = "source-summary action";
+    summary.textContent = `Action needed: ${actionRows.map(row => `${row.name}: ${row.action}`).join(" ")}`;
+  } else if (warnRows.length) {
+    summary.className = "source-summary warn";
+    summary.textContent = `Warning: ${warnRows.map(row => `${row.name}: ${row.action}`).join(" ")}`;
+  } else if (pendingRows.length) {
+    summary.className = "source-summary pending";
+    summary.textContent = "Some sources have not been checked in this page session yet.";
+  } else {
+    summary.className = "source-summary ok";
+    summary.textContent = "All required local data coverage looks current.";
+  }
+
+  wrap.innerHTML = `<table>
+    <thead>
+      <tr>
+        <th>Source</th>
+        <th>Status</th>
+        <th>Coverage / last check</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${sourceRows.map(row => `
+        <tr${row.state === "action" ? ` class="source-action-needed"` : ""}>
+          <td>${escapeHtml(row.name)}</td>
+          <td><span class="status-badge ${escapeHtml(row.state)}">${escapeHtml(sourceStateLabel(row.state))}</span></td>
+          <td>${escapeHtml(row.detail)}</td>
+          <td>${escapeHtml(row.action)}</td>
+        </tr>`).join("")}
+    </tbody>
+  </table>`;
+}
+
+function buildSourceStatusRows(rows) {
+  const historyRows = rows || [];
+  const latestSentiment = historyRows[historyRows.length - 1] || null;
+  const firstSentiment = historyRows[0] || null;
+  const marketTicker = loadMarketTicker();
+  const spySeries = loadSpySeries(marketTicker);
+  const latestSpy = [...spySeries].reverse().find(row => Number.isFinite(row.spy));
+  const latestVix = [...historyRows].reverse().find(row => Number.isFinite(row.vix));
+  const staleDays = 10;
+
+  return [
+    buildLocalCoverageRow(
+      "Fear & Greed history",
+      Boolean(historyRows.length),
+      historyRows.length
+        ? `${historyRows.length.toLocaleString()} rows, ${firstSentiment.date} to ${latestSentiment.date}.`
+        : "No saved sentiment rows.",
+      "Refresh now to load canonical history and live CNN tail."
+    ),
+    buildFetchStatusRow(
+      "Live CNN tail",
+      "cnn",
+      latestSentiment ? `Latest saved sentiment date: ${latestSentiment.date}.` : "No live tail saved yet.",
+      "Refresh now; if blocked, the page retries through the configured CORS proxy."
+    ),
+    buildSpyStatusRow(latestSentiment, latestSpy, staleDays, marketTicker),
+    buildVixStatusRow(latestSentiment, latestVix, staleDays),
+    buildFetchStatusRow(
+      "Canonical history CSV",
+      "history",
+      historyRows.length ? `Saved range: ${firstSentiment.date} to ${latestSentiment.date}.` : "No canonical history saved yet.",
+      "Refresh now to reload canonical history."
+    )
+  ];
+}
+
+function buildLocalCoverageRow(name, ok, detail, action) {
+  return {
+    name,
+    state: ok ? "ok" : "action",
+    detail,
+    action: ok ? "No action needed." : action
+  };
+}
+
+function buildFetchStatusRow(name, key, fallbackDetail, fallbackAction) {
+  const status = sourceFetchStatus[key];
+  if (!status) {
+    return {
+      name,
+      state: "pending",
+      detail: fallbackDetail,
+      action: "Not checked in this page session yet."
+    };
+  }
+
+  return {
+    name,
+    state: status.state,
+    detail: status.detail || fallbackDetail,
+    action: status.action || (status.state === "ok" ? "No action needed." : fallbackAction)
+  };
+}
+
+function buildSpyStatusRow(latestSentiment, latestSpy, staleDays, marketTicker = loadMarketTicker()) {
+  const fetchStatus = sourceFetchStatus.spyYahoo;
+  const sourceName = `Yahoo ${marketTicker} chart`;
+  if (fetchStatus?.state === "pending") {
+    return {
+      name: sourceName,
+      state: "pending",
+      detail: fetchStatus.detail || `${marketTicker} fetch in progress.`,
+      action: fetchStatus.action || "Wait for refresh to finish."
+    };
+  }
+
+  if (!latestSentiment) {
+    return {
+      name: sourceName,
+      state: "pending",
+      detail: "Waiting for sentiment coverage.",
+      action: "Fetch data first."
+    };
+  }
+
+  if (!latestSpy) {
+    return {
+      name: sourceName,
+      state: fetchStatus?.state === "warn" ? "warn" : "pending",
+      detail: `No saved ${marketTicker} price series.`,
+      action: fetchStatus?.action || `Refresh now to load Yahoo ${marketTicker} history.`
+    };
+  }
+
+  const lag = daysBetweenIso(latestSpy.date, latestSentiment.date);
+  if (lag > staleDays) {
+    return {
+      name: sourceName,
+      state: "warn",
+      detail: `Latest ${marketTicker} ${latestSpy.date}; latest sentiment ${latestSentiment.date}; lag ${lag} days.`,
+      action: `Refresh now; if Yahoo fetch keeps failing, ${marketTicker} returns may be stale.`
+    };
+  }
+
+  return {
+    name: sourceName,
+    state: fetchStatus?.state === "warn" ? "warn" : "ok",
+    detail: fetchStatus?.detail || `Latest ${marketTicker} ${latestSpy.date}; latest sentiment ${latestSentiment.date}.`,
+    action: fetchStatus?.state === "warn" ? fetchStatus.action : "No action needed."
+  };
+}
+
+function buildVixStatusRow(latestSentiment, latestVix, staleDays) {
+  const fetchStatus = sourceFetchStatus.vix;
+  if (fetchStatus?.state === "pending") {
+    return {
+      name: "datasets/finance-vix history",
+      state: "pending",
+      detail: fetchStatus.detail || "VIX fetch in progress.",
+      action: fetchStatus.action || "Wait for refresh to finish."
+    };
+  }
+
+  if (!latestVix) {
+    return {
+      name: "datasets/finance-vix history",
+      state: fetchStatus?.state === "warn" ? "warn" : "pending",
+      detail: fetchStatus?.detail || "No saved VIX close values.",
+      action: fetchStatus?.action || "Refresh now to reload datasets/finance-vix history."
+    };
+  }
+
+  const lag = latestSentiment ? daysBetweenIso(latestVix.date, latestSentiment.date) : 0;
+  if (lag > staleDays) {
+    return {
+      name: "datasets/finance-vix history",
+      state: "warn",
+      detail: `Latest VIX ${latestVix.date}; latest sentiment ${latestSentiment.date}; lag ${lag} days.`,
+      action: "Refresh now; if the VIX CSV fetch keeps failing, VIX-based criteria may be stale."
+    };
+  }
+
+  return {
+    name: "datasets/finance-vix history",
+    state: fetchStatus?.state === "warn" ? "warn" : "ok",
+    detail: fetchStatus?.detail || `Latest VIX ${latestVix.date}.`,
+    action: fetchStatus?.state === "warn" ? fetchStatus.action : "No action needed."
+  };
+}
+
+function sourceStateLabel(state) {
+  return {
+    ok: "OK",
+    warn: "Warning",
+    action: "Action needed",
+    pending: "Pending"
+  }[state] || "Unknown";
+}
+
+function renderReturnsTable(rows, checkpoints = loadReturnCheckpoints()) {
+  const wrap = $("returnsWrap");
+  if (!wrap) return;
+
+  const marketTicker = loadMarketTicker();
+  const months = normalizeReturnCheckpoints(checkpoints);
+  const returnRows = buildForwardReturns(rows, buildSpySeries(rows), months);
+  wrap.innerHTML = returnRows.length
+    ? `<table>
+        <thead>
+          <tr>
+            <th>Signal date</th>
+            <th>Fear & Greed</th>
+            <th>Entry ${escapeHtml(marketTicker)}</th>
+            ${months.map(value => `<th>${escapeHtml(formatCheckpointLabel(value))}</th>`).join("")}
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${returnRows.slice().reverse().map(row => `
+            <tr>
+              <td>${escapeHtml(row.signal.date)}</td>
+              <td>${formatNum(row.signal.value)}</td>
+              <td>${formatReturnEndpoint(row.entry)}</td>
+              ${row.returns.map(result => `<td>${formatReturnCell(result)}</td>`).join("")}
+              <td>${escapeHtml(row.signal.reasons.join("; "))}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`
+    : `<p class="muted">No signal starts yet.</p>`;
+}
+
+function renderSignalProjection(rows, latest) {
+  const summary = $("signalProjectionSummary");
+  const wrap = $("signalProjectionWrap");
+  if (!summary || !wrap) return;
+
+  if (!latest) {
+    summary.textContent = "No latest row yet.";
+    wrap.innerHTML = "";
+    return;
+  }
+
+  const spySeries = buildSpySeries(rows);
+  const entry = findPreviousSpyRow(spySeries, latest.date) || findNextSpyRow(spySeries, latest.date);
+  const projections = buildSignalProjectionStats(rows, latest, spySeries, SIGNAL_PROJECTION_CHECKPOINTS);
+  const maxSampleCount = Math.max(0, ...projections.map(item => item.count));
+  const marketTicker = loadMarketTicker();
+  const entryText = entry ? ` Current ${marketTicker} reference: ${formatCurrency(entry.spy)} on ${entry.date}.` : ` No current ${marketTicker} reference is available.`;
+  const stateText = latest.opportunity
+    ? `Active signal on ${latest.date}.`
+    : `No active signal on ${latest.date}.`;
+
+  summary.textContent =
+    `${stateText} Based on prior signal starts under the current criteria before ${latest.date}. ${maxSampleCount.toLocaleString()} historical samples are available at the most-complete horizon.${entryText}`;
+
+  wrap.innerHTML = projections.some(item => item.count)
+    ? `<table>
+        <thead>
+          <tr>
+            <th>Horizon</th>
+            <th>Projected return</th>
+            <th>Median</th>
+            <th>Win rate</th>
+            <th>Samples</th>
+            <th>Projected ${escapeHtml(marketTicker)}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${projections.map(item => {
+            const projectedSpy = entry && Number.isFinite(item.avg)
+              ? entry.spy * (1 + item.avg / 100)
+              : null;
+            return `
+            <tr>
+              <td>${escapeHtml(formatCheckpointLabel(item.months))}</td>
+              <td>${formatProjectionPercent(item.avg)}</td>
+              <td>${formatProjectionPercent(item.median)}</td>
+              <td>${formatPercent(item.winRate * 100)}</td>
+              <td>${item.count}</td>
+              <td>${projectedSpy == null ? "" : formatCurrency(projectedSpy)}</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>`
+    : `<p class="muted">No completed historical forward returns are available for the current criteria.</p>`;
+}
+
+function buildSignalProjectionStats(rows, latest, spySeries, checkpoints) {
+  const months = normalizeReturnCheckpoints(checkpoints);
+  const valuesByMonth = new Map(months.map(value => [value, []]));
+
+  for (const row of rows) {
+    if (!row.opportunityStart || row.date >= latest.date) continue;
+    const entry = findNextSpyRow(spySeries, row.date);
+    for (const monthsValue of months) {
+      const result = buildForwardReturn(spySeries, row.date, entry, monthsValue);
+      if (Number.isFinite(result.pct)) {
+        valuesByMonth.get(monthsValue).push(result.pct);
+      }
+    }
+  }
+
+  return months.map(monthsValue => {
+    const values = valuesByMonth.get(monthsValue) || [];
+    const wins = values.filter(value => value > 0).length;
+    return {
+      months: monthsValue,
+      count: values.length,
+      avg: average(values),
+      median: median(values),
+      winRate: values.length ? wins / values.length : NaN
+    };
+  });
+}
+
+function buildForwardReturns(rows, spySeries = buildSpySeries(rows), checkpoints = loadReturnCheckpoints()) {
+  const months = normalizeReturnCheckpoints(checkpoints);
+  return rows
+    .filter(row => row.opportunityStart)
+    .map(signal => {
+      const entry = findNextSpyRow(spySeries, signal.date);
+      return {
+        signal,
+        entry,
+        returns: months.map(value => ({
+          months: value,
+          ...buildForwardReturn(spySeries, signal.date, entry, value)
+        }))
+      };
+    });
+}
+
+function buildForwardReturn(spySeries, signalDate, entry, months) {
+  const targetDate = addCalendarMonths(signalDate, months);
+  if (!entry) return { targetDate, exit: null, pct: null, missingEntry: true };
+  const exit = findNextSpyRow(spySeries, targetDate);
+  if (!exit) return { targetDate, exit: null, pct: null };
+
+  return {
+    targetDate,
+    exit,
+    pct: ((exit.spy - entry.spy) / entry.spy) * 100
+  };
+}
+
+function findNextSpyRow(rows, date) {
+  return rows.find(row => row.date >= date && Number.isFinite(row.spy)) || null;
+}
+
+function findPreviousSpyRow(rows, date) {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const row = rows[i];
+    if (row.date <= date && Number.isFinite(row.spy)) return row;
+  }
+  return null;
+}
+
+function buildSpySeries(rows) {
+  return normalizeSpyRows([
+    ...loadSpySeries(),
+    ...rows.filter(row => Number.isFinite(row.spy)).map(row => ({ date: row.date, spy: row.spy }))
+  ]);
+}
+
+function addCalendarMonths(dateIso, months) {
+  const [year, month, day] = dateIso.split("-").map(Number);
+  const targetMonthIndex = month - 1 + months;
+  const target = new Date(Date.UTC(year, targetMonthIndex, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(day, lastDay));
+  return target.toISOString().slice(0, 10);
+}
+
+function formatReturnEndpoint(row) {
+  const marketTicker = loadMarketTicker();
+  if (!row) return `No ${marketTicker} data`;
+  return `${formatCurrency(row.spy)}<span class="cell-note">${escapeHtml(row.date)}</span>`;
+}
+
+function formatReturnCell(result) {
+  const marketTicker = loadMarketTicker();
+  if (result?.missingEntry) {
+    return `No ${escapeHtml(marketTicker)} data<span class="cell-note">Target ${escapeHtml(result.targetDate)}</span>`;
+  }
+
+  if (!result || !result.exit) {
+    const target = result?.targetDate ? `Target ${escapeHtml(result.targetDate)}` : "";
+    return `Pending<span class="cell-note">${target}</span>`;
+  }
+
+  const klass = result.pct >= 0 ? "return-positive" : "return-negative";
+  return `<span class="${klass}">${formatPercent(result.pct)}</span><span class="cell-note">${escapeHtml(result.exit.date)} ${formatCurrency(result.exit.spy)}</span>`;
+}
+
+function runOptimizer() {
+  const rows = loadHistory();
+  const spySeries = buildSpySeries(rows);
+  const checkpoints = loadReturnCheckpoints();
+  const optimizerSettings = loadOptimizerSettings();
+
+  cancelOptimizerRun();
+
+  if (!rows.length || !spySeries.length) {
+    clearOptimizerResults();
+    return;
+  }
+
+  if (!window.Worker || !window.Blob || !window.URL) {
+    const summary = $("optimizerSummary");
+    if (summary) summary.textContent = "This browser does not support Web Workers, so the optimizer cannot run without blocking the page.";
+    return;
+  }
+
+  const runId = ++optimizerRunId;
+  const workerCount = getOptimizerWorkerCount();
+  const workers = [];
+  try {
+    for (let index = 0; index < workerCount; index++) {
+      workers.push(createOptimizerWorker());
+    }
+  } catch (err) {
+    for (const worker of workers) worker.terminate();
+    setOptimizerBusy(false);
+    const summary = $("optimizerSummary");
+    if (summary) summary.textContent = `Optimizer worker could not start: ${err.message}.`;
+    return;
+  }
+  optimizerWorkers = workers;
+  setOptimizerBusy(true);
+
+  const summary = $("optimizerSummary");
+  if (summary) {
+    summary.textContent =
+      `Optimizer running across ${workerCount} background worker${workerCount === 1 ? "" : "s"} and ${formatCheckpointList(checkpoints)} checkpoints.`;
+  }
+  updateOptimizerProgress({ percent: 0, phase: "Starting optimizer" });
+
+  const workerProgress = workers.map(() => ({ percent: 0, completed: 0, total: 0, phase: "Starting optimizer" }));
+  const workerResults = [];
+  let completedWorkers = 0;
+  let failed = false;
+
+  const failRun = message => {
+    if (runId !== optimizerRunId) return;
+    if (failed) return;
+    failed = true;
+    terminateOptimizerWorkers();
+    optimizerResults = [];
+    renderOptimizerResults(optimizerResults);
+    const failureSummary = $("optimizerSummary");
+    if (failureSummary) failureSummary.textContent = message;
+    updateOptimizerProgress({ percent: 0, phase: "Optimizer failed" });
+  };
+
+  const updateParallelProgress = (workerIndex, data) => {
+    workerProgress[workerIndex] = {
+      ...workerProgress[workerIndex],
+      percent: clampNumber(data?.percent, 0, 100, workerProgress[workerIndex]?.percent || 0),
+      completed: Number(data?.completed),
+      total: Number(data?.total),
+      phase: data?.phase || workerProgress[workerIndex]?.phase || "Optimizer"
+    };
+
+    const averagePercent = average(workerProgress.map(item => item.percent));
+    const activePhase = data?.phase || "Optimizer";
+    const phaseProgress = workerProgress.filter(item =>
+      item.phase === activePhase && Number.isFinite(item.completed) && Number.isFinite(item.total) && item.total > 0
+    );
+    const completed = phaseProgress.reduce((sum, item) => sum + item.completed, 0);
+    const total = phaseProgress.reduce((sum, item) => sum + item.total, 0);
+    updateOptimizerProgress({
+      phase: `${activePhase} (${completedWorkers}/${workerCount} workers complete)`,
+      percent: averagePercent,
+      completed,
+      total
+    });
+  };
+
+  workers.forEach((worker, workerIndex) => {
+    worker.onmessage = event => {
+      if (runId !== optimizerRunId || failed) return;
+
+      const data = event.data || {};
+      if (data.progress) {
+        updateParallelProgress(workerIndex, data);
+        return;
+      }
+
+      cleanupOptimizerWorker(worker);
+
+      if (!data.ok) {
+        const message = data.error || "unknown optimizer worker error";
+        failRun(`Optimizer failed: ${message}.`);
+        return;
+      }
+
+      workerResults.push(...(Array.isArray(data.results) ? data.results : []));
+      completedWorkers += 1;
+      workerProgress[workerIndex] = { ...workerProgress[workerIndex], percent: 100 };
+      updateParallelProgress(workerIndex, { phase: "Combining results", percent: 100 });
+
+      if (completedWorkers === workerCount) {
+        optimizerResults = workerResults
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 20);
+        updateOptimizerProgress({ percent: 100, phase: "Optimizer complete" });
+        renderOptimizerResults(optimizerResults);
+      }
+    };
+
+    worker.onerror = event => {
+      if (runId !== optimizerRunId || failed) return;
+      failRun(`Optimizer worker failed: ${event.message || "unknown error"}.`);
+    };
+  });
+
+  try {
+    workers.forEach((worker, workerIndex) => {
+      worker.postMessage({ rows, spySeries, checkpoints, optimizerSettings, workerIndex, workerCount });
+    });
+  } catch (err) {
+    failRun(`Optimizer worker could not receive data: ${err.message}.`);
+  }
+}
+
+function getOptimizerWorkerCount() {
+  const cores = Number(navigator.hardwareConcurrency);
+  if (!Number.isFinite(cores) || cores < 2) return 1;
+  return Math.max(1, Math.min(8, Math.floor(cores) - 1));
+}
+
+function createOptimizerWorker() {
+  const source = `
+const DEFAULT_CRITERIA = ${JSON.stringify(DEFAULT_CRITERIA)};
+const DEFAULT_RETURN_CHECKPOINTS = ${JSON.stringify(DEFAULT_RETURN_CHECKPOINTS)};
+const DEFAULT_OPTIMIZER_SETTINGS = ${JSON.stringify(DEFAULT_OPTIMIZER_SETTINGS)};
+
+${clampNumber.toString()}
+${clampInteger.toString()}
+${normalizeOptimizerSettings.toString()}
+${normalizeReturnCheckpoints.toString()}
+${normalizeCriteria.toString()}
+${formatNum.toString()}
+${addRollingFlags.toString()}
+${findNextSpyRow.toString()}
+${addCalendarMonths.toString()}
+${buildForwardReturn.toString()}
+${buildForwardReturns.toString()}
+${average.toString()}
+${yearsBetween.toString()}
+${cadenceFitScore.toString()}
+${buildDeploymentPeriods.toString()}
+${simulateDeploymentPeriod.toString()}
+${scoreDeploymentResult.toString()}
+${simulateDeployment.toString()}
+${optimizeDeployment.toString()}
+${evaluateCriteria.toString()}
+${optimizeCriteria.toString()}
+
+self.onmessage = event => {
+  try {
+    const { rows, spySeries, checkpoints, optimizerSettings, workerIndex, workerCount } = event.data || {};
+    const reportProgress = update => self.postMessage({ ok: true, progress: true, ...update });
+    const results = optimizeCriteria(rows || [], spySeries || [], checkpoints || DEFAULT_RETURN_CHECKPOINTS, optimizerSettings || DEFAULT_OPTIMIZER_SETTINGS, reportProgress, workerIndex || 0, workerCount || 1);
+    self.postMessage({ ok: true, results });
+  } catch (err) {
+    self.postMessage({ ok: false, error: err && err.message ? err.message : String(err) });
+  }
+};
+`;
+  const url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+  const worker = new Worker(url);
+  URL.revokeObjectURL(url);
+  return worker;
+}
+
+function setOptimizerBusy(busy) {
+  optimizerBusy = Boolean(busy);
+  const runBtn = $("runOptimizerBtn");
+
+  if (runBtn) {
+    runBtn.disabled = optimizerBusy;
+    runBtn.textContent = optimizerBusy ? "Optimizing..." : "Run optimizer";
+  }
+}
+
+function cleanupOptimizerWorker(worker) {
+  const index = optimizerWorkers.indexOf(worker);
+  if (index >= 0) {
+    optimizerWorkers.splice(index, 1);
+  }
+  worker.terminate();
+  if (!optimizerWorkers.length) {
+    setOptimizerBusy(false);
+  }
+}
+
+function terminateOptimizerWorkers() {
+  for (const worker of optimizerWorkers) {
+    worker.terminate();
+  }
+  optimizerWorkers = [];
+  setOptimizerBusy(false);
+}
+
+function cancelOptimizerRun() {
+  optimizerRunId++;
+  terminateOptimizerWorkers();
+  hideOptimizerProgress();
+}
+
+function clearOptimizerResults() {
+  cancelOptimizerRun();
+  optimizerResults = [];
+  renderOptimizerResults(optimizerResults);
+}
+
+function updateOptimizerProgress(update) {
+  const wrap = $("optimizerProgressWrap");
+  const progress = $("optimizerProgress");
+  const text = $("optimizerProgressText");
+  if (!wrap || !progress || !text) return;
+
+  const percent = clampNumber(update?.percent, 0, 100, 0);
+  const completed = Number(update?.completed);
+  const total = Number(update?.total);
+  const countText = Number.isFinite(completed) && Number.isFinite(total) && total > 0
+    ? ` (${Math.min(completed, total).toLocaleString()} / ${total.toLocaleString()})`
+    : "";
+
+  wrap.hidden = false;
+  progress.value = percent;
+  text.textContent = `${update?.phase || "Optimizer"}: ${percent.toFixed(0)}%${countText}`;
+}
+
+function hideOptimizerProgress() {
+  const wrap = $("optimizerProgressWrap");
+  const progress = $("optimizerProgress");
+  const text = $("optimizerProgressText");
+  if (wrap) wrap.hidden = true;
+  if (progress) progress.value = 0;
+  if (text) text.textContent = "0%";
+}
+
+function optimizeCriteria(rows, spySeries, checkpoints = loadReturnCheckpoints(), optimizerSettings = loadOptimizerSettings(), progress = null, workerIndex = 0, workerCount = 1) {
+  if (!rows.length || !spySeries.length) return [];
+  const months = normalizeReturnCheckpoints(checkpoints);
+  const settings = normalizeOptimizerSettings(optimizerSettings);
+  const shardCount = clampInteger(workerCount, 1, 64, 1);
+  const shardIndex = Math.min(shardCount - 1, Math.max(0, Math.floor(Number(workerIndex) || 0)));
+  const report = typeof progress === "function" ? progress : null;
+  let lastReportedPercent = -1;
+  const reportProgress = (phase, percent, completed = null, total = null) => {
+    if (!report) return;
+    const boundedPercent = Math.max(0, Math.min(100, percent));
+    if (boundedPercent < 100 && boundedPercent - lastReportedPercent < 1) return;
+    lastReportedPercent = boundedPercent;
+    report({ phase, percent: boundedPercent, completed, total });
+  };
+
+  const lowThresholds = [5, 10, 15, 20, 25, 30, 35, 40];
+  const lowDays = [1, 2, 3, 5];
+  const sustainedThresholds = [10, 15, 20, 25, 30, 35, 40];
+  const sustainedDays = [2, 3, 5, 10];
+  const vixOptions = [{ enabled: false, threshold: DEFAULT_CRITERIA.vixHigh.threshold, days: DEFAULT_CRITERIA.vixHigh.days }];
+  for (const threshold of [20, 25, 30, 35, 40, 45]) {
+    for (const days of [1, 2, 3]) {
+      vixOptions.push({ enabled: true, threshold, days });
+    }
+  }
+
+  const results = [];
+  const totalCandidates = lowThresholds.length
+    * lowDays.length
+    * sustainedThresholds.length
+    * sustainedDays.length
+    * vixOptions.length;
+  const workerTotalCandidates = Math.floor(totalCandidates / shardCount) + (shardIndex < totalCandidates % shardCount ? 1 : 0);
+  let checkedCandidates = 0;
+  let candidateIndex = 0;
+  reportProgress("Testing criteria", 0, 0, workerTotalCandidates);
+
+  for (const lowThreshold of lowThresholds) {
+    for (const lowDayCount of lowDays) {
+      for (const sustainedThreshold of sustainedThresholds) {
+        for (const sustainedDayCount of sustainedDays) {
+          for (const vix of vixOptions) {
+            const isWorkerCandidate = candidateIndex % shardCount === shardIndex;
+            candidateIndex += 1;
+            if (!isWorkerCandidate) continue;
+
+            const criteria = normalizeCriteria({
+              lowScore: { enabled: true, threshold: lowThreshold, days: lowDayCount },
+              sustainedScore: { enabled: true, threshold: sustainedThreshold, days: sustainedDayCount },
+              vixHigh: vix
+            });
+            const result = evaluateCriteria(criteria, rows, spySeries, months, settings);
+            if (result) results.push(result);
+            checkedCandidates += 1;
+            reportProgress("Testing criteria", (checkedCandidates / Math.max(1, workerTotalCandidates)) * 85, checkedCandidates, workerTotalCandidates);
+          }
+        }
+      }
+    }
+  }
+
+  const topResults = results
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 80);
+  const deploymentTotal = topResults.length;
+  reportProgress("Optimizing deployment", 85, 0, deploymentTotal);
+
+  const withDeployment = topResults.map((result, index) => {
+    const candidate = {
+      ...result,
+      deployment: optimizeDeployment(addRollingFlags(rows, result.criteria), spySeries, months)
+    };
+    reportProgress("Optimizing deployment", 85 + (((index + 1) / Math.max(1, deploymentTotal)) * 15), index + 1, deploymentTotal);
+    return candidate;
+  });
+
+  reportProgress("Complete", 100, deploymentTotal, deploymentTotal);
+
+  return withDeployment
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 20);
+}
+
+function optimizeDeployment(flaggedRows, spySeries, checkpoints = loadReturnCheckpoints()) {
+  const months = normalizeReturnCheckpoints(checkpoints);
+  const allocationOptions = [0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.125, 0.15, 0.2, 0.25, 0.33, 0.4, 0.5, 0.6, 0.75, 1];
+  let best = null;
+
+  for (const allocationPct of allocationOptions) {
+    const result = simulateDeployment(flaggedRows, spySeries, allocationPct, months);
+    if (!result || !Number.isFinite(result.deploymentScore)) continue;
+    if (!best
+      || result.deploymentScore > best.deploymentScore
+      || (result.deploymentScore === best.deploymentScore && result.avgReturnPct > best.avgReturnPct)
+      || (result.deploymentScore === best.deploymentScore && result.avgReturnPct === best.avgReturnPct && result.allocationPct < best.allocationPct)) {
+      best = result;
+    }
+  }
+
+  return best;
+}
+
+function buildDeploymentPeriods(flaggedRows) {
+  const periods = [];
+  let current = [];
+
+  for (const row of flaggedRows) {
+    if (row.opportunity) {
+      current.push(row);
+    } else if (current.length) {
+      periods.push(current);
+      current = [];
+    }
+  }
+
+  if (current.length) periods.push(current);
+  return periods;
+}
+
+function simulateDeploymentPeriod(periodRows, spySeries, allocationPct, checkpoints) {
+  const start = periodRows[0];
+  const end = periodRows[periodRows.length - 1];
+  if (!start || !end) return null;
+
+  const observations = [];
+  let maxBuyCount = 0;
+  let maxDeployed = 0;
+  let firstBuyDate = "";
+  let lastBuyDate = "";
+
+  for (const months of checkpoints) {
+    const targetDate = addCalendarMonths(start.date, months);
+    const exit = findNextSpyRow(spySeries, targetDate);
+    if (!exit) continue;
+
+    let cash = 1;
+    let shares = 0;
+    let deployed = 0;
+    let buyCount = 0;
+    let lastPriceDate = "";
+    let periodFirstBuyDate = "";
+    let periodLastBuyDate = "";
+
+    for (const row of periodRows) {
+      if (cash <= 0.000001) break;
+      const priceRow = findNextSpyRow(spySeries, row.date);
+      if (!priceRow || priceRow.date > exit.date || priceRow.date === lastPriceDate) continue;
+
+      const amount = cash * allocationPct;
+      if (amount <= 0.000001) continue;
+
+      cash -= amount;
+      shares += amount / priceRow.spy;
+      deployed += amount;
+      buyCount += 1;
+      periodFirstBuyDate ||= priceRow.date;
+      periodLastBuyDate = priceRow.date;
+      lastPriceDate = priceRow.date;
+    }
+
+    if (!buyCount || !shares) continue;
+
+    const value = cash + (shares * exit.spy);
+    observations.push({
+      months,
+      targetDate,
+      exitDate: exit.date,
+      returnPct: (value - 1) * 100,
+      deployedCapitalPct: deployed * 100,
+      buyCount
+    });
+    maxBuyCount = Math.max(maxBuyCount, buyCount);
+    maxDeployed = Math.max(maxDeployed, deployed);
+    firstBuyDate ||= periodFirstBuyDate;
+    lastBuyDate = periodLastBuyDate || lastBuyDate;
+  }
+
+  if (!observations.length) return null;
+
+  return {
+    startDate: start.date,
+    endDate: end.date,
+    observations,
+    buyCount: maxBuyCount,
+    deployedCapitalPct: maxDeployed * 100,
+    firstBuyDate,
+    lastBuyDate
+  };
+}
+
+function scoreDeploymentResult(returns, winRate, avgLoss, worstLoss, avgDeployedCapitalPct, periodCount) {
+  const logReturns = returns.map(value => {
+    const growth = 1 + (value / 100);
+    return Math.log(Math.max(0.000001, growth)) * 100;
+  });
+  const avgLogReturn = average(logReturns);
+  const lossRate = returns.length ? returns.filter(value => value < 0).length / returns.length : 1;
+  const usePenalty = avgDeployedCapitalPct < 25 ? (25 - avgDeployedCapitalPct) * 0.03 : 0;
+  return avgLogReturn
+    + (average(returns) * 0.15)
+    + (winRate * 2)
+    + (Math.log1p(periodCount) * 0.1)
+    - (lossRate * 2)
+    - (avgLoss * 0.35)
+    - (worstLoss * 0.15)
+    - usePenalty;
+}
+
+function simulateDeployment(flaggedRows, spySeries, allocationPct, checkpoints = loadReturnCheckpoints()) {
+  const periods = buildDeploymentPeriods(flaggedRows);
+  const periodResults = periods
+    .map(periodRows => simulateDeploymentPeriod(periodRows, spySeries, allocationPct, checkpoints))
+    .filter(Boolean);
+
+  const returns = periodResults.flatMap(period => period.observations.map(item => item.returnPct));
+  if (!returns.length) return null;
+
+  const wins = returns.filter(value => value > 0).length;
+  const losses = returns.filter(value => value < 0);
+  const lossMagnitudes = losses.map(value => Math.abs(value));
+  const avgReturnPct = average(returns);
+  const winRate = wins / returns.length;
+  const avgLoss = lossMagnitudes.length ? average(lossMagnitudes) : 0;
+  const worstLoss = lossMagnitudes.length ? Math.max(...lossMagnitudes) : 0;
+  const avgDeployedCapitalPct = average(periodResults.map(period => period.deployedCapitalPct));
+  const avgBuyDays = average(periodResults.map(period => period.buyCount));
+  const buyCount = periodResults.reduce((sum, period) => sum + period.buyCount, 0);
+
+  return {
+    allocationPct,
+    deploymentScore: scoreDeploymentResult(returns, winRate, avgLoss, worstLoss, avgDeployedCapitalPct, periodResults.length),
+    totalReturnPct: avgReturnPct,
+    avgReturnPct,
+    winRate,
+    lossCount: losses.length,
+    observationCount: returns.length,
+    avgLoss,
+    worstLoss,
+    deployedCapitalPct: avgDeployedCapitalPct,
+    avgDeployedCapitalPct,
+    avgBuyDays,
+    buyCount,
+    periodCount: periodResults.length,
+    firstBuyDate: periodResults[0]?.firstBuyDate || "",
+    lastBuyDate: periodResults[periodResults.length - 1]?.lastBuyDate || ""
+  };
+}
+
+function evaluateCriteria(criteria, rows, spySeries, checkpoints = loadReturnCheckpoints(), optimizerSettings = loadOptimizerSettings()) {
+  const months = normalizeReturnCheckpoints(checkpoints);
+  const settings = normalizeOptimizerSettings(optimizerSettings);
+  const flagged = addRollingFlags(rows, criteria);
+  const forwardRows = buildForwardReturns(flagged, spySeries, months);
+  const completeReturns = [];
+  const horizonReturns = months.map(value => ({ months: value, values: [] }));
+
+  for (const row of forwardRows) {
+    row.returns.forEach((result, index) => {
+      const value = result?.pct;
+      if (Number.isFinite(value)) {
+        completeReturns.push(value);
+        horizonReturns[index].values.push(value);
+      }
+    });
+  }
+
+  const signalCount = forwardRows.length;
+  if (signalCount < 3 || completeReturns.length < 6) return null;
+
+  const avgReturn = average(completeReturns);
+  const winCount = completeReturns.filter(value => value > 0).length;
+  const losses = completeReturns.filter(value => value < 0);
+  const lossMagnitudes = losses.map(value => Math.abs(value));
+  const lossCount = losses.length;
+  const winRate = winCount / completeReturns.length;
+  const lossRate = lossCount / completeReturns.length;
+  const avgLoss = lossMagnitudes.length ? average(lossMagnitudes) : 0;
+  const worstLoss = lossMagnitudes.length ? Math.max(...lossMagnitudes) : 0;
+  const firstDate = rows[0]?.date;
+  const latestDate = rows[rows.length - 1]?.date;
+  const fullYears = firstDate && latestDate ? Math.max(1, yearsBetween(firstDate, latestDate)) : 1;
+  const recentStart = latestDate ? addCalendarMonths(latestDate, -settings.recentYears * 12) : "";
+  const recentWindowStart = firstDate && recentStart && firstDate > recentStart ? firstDate : recentStart;
+  const recentYears = recentWindowStart && latestDate ? Math.max(1, yearsBetween(recentWindowStart, latestDate)) : settings.recentYears;
+  const recentSignalCount = recentStart
+    ? forwardRows.filter(row => row.signal.date >= recentStart).length
+    : signalCount;
+  const signalRate = signalCount / fullYears;
+  const recentSignalRate = recentSignalCount / recentYears;
+  const cadenceScore =
+    cadenceFitScore(signalRate, settings) +
+    (cadenceFitScore(recentSignalRate, settings) * 1.4);
+  const downsidePenalty = (lossRate * 2) + (avgLoss * 0.35) + (worstLoss * 0.15);
+  const score = avgReturn + (winRate * 6) - downsidePenalty + Math.log1p(signalCount) + cadenceScore;
+
+  return {
+    criteria,
+    score,
+    signalCount,
+    signalRate,
+    recentSignalCount,
+    recentSignalRate,
+    cadenceScore,
+    observationCount: completeReturns.length,
+    avgReturn,
+    checkpointAverages: horizonReturns.map(item => ({
+      months: item.months,
+      avg: average(item.values)
+    })),
+    winRate,
+    avgLoss,
+    worstLoss,
+    lossCount
+  };
+}
+
+function cadenceFitScore(rate, settings) {
+  const s = normalizeOptimizerSettings(settings);
+  const value = Number(rate);
+  if (!Number.isFinite(value)) return -12;
+  if (value >= s.targetMinPerYear && value <= s.targetMaxPerYear) return 6;
+
+  const nearest = value < s.targetMinPerYear ? s.targetMinPerYear : s.targetMaxPerYear;
+  return -Math.min(12, Math.abs(value - nearest) * 5);
+}
+
+function renderOptimizerResults(results) {
+  const summary = $("optimizerSummary");
+  const wrap = $("optimizerWrap");
+  const activeCriteria = loadCriteria();
+  const checkpoints = loadReturnCheckpoints();
+  const settings = loadOptimizerSettings();
+  const marketTicker = loadMarketTicker();
+
+  if (summary) {
+    summary.textContent = results.length
+      ? `Top ${results.length} candidates ranked by return, win rate, loss count, and ${formatRateRange(settings.targetMinPerYear, settings.targetMaxPerYear)} cadence across ${formatCheckpointList(checkpoints)} checkpoints. Recent cadence uses the last ${settings.recentYears} years. Deployment stats reset capital for each contiguous signal period.`
+      : `No candidates had enough completed ${marketTicker} forward-return observations. Fetch data first or loosen the search ranges.`;
+  }
+  if (!wrap) return;
+
+  wrap.innerHTML = results.length
+    ? `<table class="wide-table optimizer-table">
+        <thead>
+          <tr>
+            <th class="rank-cell">Rank</th>
+            <th class="score-cell">Score</th>
+            <th class="count-cell">Signals</th>
+            <th class="rate-cell">Signals/yr</th>
+            <th class="rate-cell">Recent ${escapeHtml(String(settings.recentYears))}y</th>
+            <th class="return-cell">Avg return</th>
+            ${checkpoints.map(value => `<th class="return-cell">Avg ${escapeHtml(formatCheckpointShort(value))}</th>`).join("")}
+            <th class="return-cell">Win rate</th>
+            <th class="loss-cell">Losses</th>
+            <th class="loss-cell">Avg loss</th>
+            <th class="loss-cell">Worst loss</th>
+            <th class="deploy-cell">Deploy/day</th>
+            <th class="return-cell">Period return</th>
+            <th class="deploy-cell">Avg capital used</th>
+            <th class="deploy-cell">Avg buy days</th>
+            <th class="criteria-cell">Criteria</th>
+            <th class="action-cell">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${results.map((result, index) => {
+            const active = criteriaEqual(activeCriteria, result.criteria);
+            return `
+            <tr${active ? ` class="ok"` : ""}>
+              <td class="rank-cell">${index + 1}</td>
+              <td class="score-cell">${formatNum(result.score)}</td>
+              <td class="count-cell">${result.signalCount}</td>
+              <td class="rate-cell">${formatRate(result.signalRate)}</td>
+              <td class="rate-cell">${result.recentSignalCount} <span class="cell-note">${formatRate(result.recentSignalRate)}</span></td>
+              <td class="return-cell">${formatPercent(result.avgReturn)}</td>
+              ${formatOptimizerCheckpointCells(result, checkpoints)}
+              <td class="return-cell">${formatPercent(result.winRate * 100)}</td>
+              <td class="loss-cell">${result.lossCount} / ${result.observationCount}</td>
+              <td class="loss-cell">${formatLossMagnitude(result.avgLoss)}</td>
+              <td class="loss-cell">${formatLossMagnitude(result.worstLoss)}</td>
+              <td class="deploy-cell">${formatAllocationPercent(result.deployment?.allocationPct)}</td>
+              <td class="return-cell">${formatPercent(result.deployment?.avgReturnPct)}</td>
+              <td class="deploy-cell">${formatPlainPercent(result.deployment?.avgDeployedCapitalPct)}</td>
+              <td class="deploy-cell">${formatDeploymentBuyDays(result.deployment)}</td>
+              <td class="criteria-cell">${escapeHtml(describeCriteria(result.criteria).replace(/^Active criteria: /, ""))}</td>
+              <td class="action-cell"><button type="button" data-optimizer-index="${index}"${active || optimizerBusy ? " disabled" : ""}>${active ? "Active" : "Apply"}</button></td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>`
+    : `<p class="muted">No optimizer results yet.</p>`;
+}
+
+function formatOptimizerCheckpointCells(result, checkpoints = loadReturnCheckpoints()) {
+  const byMonth = new Map((result.checkpointAverages || []).map(item => [item.months, item.avg]));
+  return normalizeReturnCheckpoints(checkpoints)
+    .map(months => `<td class="return-cell">${formatPercent(byMonth.get(months))}</td>`)
+    .join("");
+}
+
+function formatDeploymentBuyDays(deployment) {
+  if (!deployment) return "";
+  const avg = Number.isFinite(deployment.avgBuyDays) ? formatNum(deployment.avgBuyDays) : "";
+  const total = Number.isFinite(deployment.buyCount) ? `${deployment.buyCount} total` : "";
+  return `${avg}${total ? `<span class="cell-note">${escapeHtml(total)}</span>` : ""}`;
+}
+
+function applyOptimizerCriteria(index) {
+  const result = optimizerResults[index];
+  if (!result) return;
+
+  saveCriteria(result.criteria);
+  render();
+  renderOptimizerResults(optimizerResults);
+
+  const summary = $("optimizerSummary");
+  if (summary) {
+    const criteriaText = describeCriteria(result.criteria).replace(/^Active criteria: /, "");
+    const deployText = result.deployment
+      ? ` Suggested deployment: ${formatAllocationPercent(result.deployment.allocationPct)} of remaining cash on each active signal day inside each contiguous signal period; average period return ${formatPercent(result.deployment.avgReturnPct)} across ${result.deployment.observationCount} checkpoint observations, using ${formatNum(result.deployment.avgBuyDays)} buy days per period on average.`
+      : "";
+    summary.textContent =
+      `Applied rank ${index + 1}: ${result.signalCount} signals (${formatRate(result.signalRate)}), ${result.recentSignalCount} recent (${formatRate(result.recentSignalRate)}), ${formatPercent(result.avgReturn)} average return, ${formatPercent(result.winRate * 100)} win rate, ${formatPlainLossMagnitude(result.avgLoss)} average loss, ${formatPlainLossMagnitude(result.worstLoss)} worst loss.${deployText} ${criteriaText}`;
+  }
+}
+
+function average(values) {
+  const usable = values.filter(Number.isFinite);
+  if (!usable.length) return NaN;
+  return usable.reduce((sum, value) => sum + value, 0) / usable.length;
+}
+
+function median(values) {
+  const usable = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!usable.length) return NaN;
+  const middle = Math.floor(usable.length / 2);
+  return usable.length % 2
+    ? usable[middle]
+    : (usable[middle - 1] + usable[middle]) / 2;
+}
+
+function yearsBetween(startIso, endIso) {
+  const start = new Date(`${startIso}T00:00:00Z`);
+  const end = new Date(`${endIso}T00:00:00Z`);
+  const years = (end - start) / (365.25 * 24 * 60 * 60 * 1000);
+  return Number.isFinite(years) && years > 0 ? years : 0;
+}
+
+function daysBetweenIso(startIso, endIso) {
+  const start = new Date(`${startIso}T00:00:00Z`);
+  const end = new Date(`${endIso}T00:00:00Z`);
+  const days = Math.round((end - start) / (24 * 60 * 60 * 1000));
+  return Number.isFinite(days) ? days : 0;
+}
+
+function formatRate(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? `${n.toFixed(2)}/yr` : "";
+}
+
+function formatRateRange(min, max) {
+  return `${formatNum(min)}-${formatNum(max)} signals/year`;
+}
+
+function updateSignalTabLabel(latest) {
+  const tab = $("tab-signal");
+  if (!tab) return;
+
+  if (!latest) {
+    tab.textContent = "Signal: No data";
+  } else if (latest.opportunity) {
+    tab.textContent = "Signal: Active";
+  } else {
+    tab.textContent = "Signal: None";
+  }
+}
+
+function filterRowsForChartRange(rows, years = loadChartRangeYears()) {
+  const source = Array.isArray(rows) ? rows : [];
+  const rangeYears = normalizeChartRangeYears(years);
+  if (!rangeYears || source.length < 2) return source;
+
+  const latest = source[source.length - 1]?.date;
+  if (!latest) return source;
+
+  const cutoff = addCalendarMonths(latest, -rangeYears * 12);
+  const filtered = source.filter(row => row.date >= cutoff);
+  return filtered.length ? filtered : source;
+}
+
+function renderChartRangeControls(rangeYears = loadChartRangeYears(), visibleRows = null, totalCount = null) {
+  const activeRange = normalizeChartRangeYears(rangeYears);
+  document.querySelectorAll("[data-chart-years]").forEach(button => {
+    button.setAttribute("aria-pressed", String(normalizeChartRangeYears(button.dataset.chartYears) === activeRange));
+  });
+
+  const summary = $("chartRangeSummary");
+  if (!summary) return;
+
+  const rows = Array.isArray(visibleRows) ? visibleRows : filterRowsForChartRange(addRollingFlags(loadHistory()), activeRange);
+  const total = Number.isFinite(totalCount) ? totalCount : rows.length;
+  if (!rows.length) {
+    summary.textContent = hasPendingDataFetch() ? "Loading chart data..." : "No chart data";
+    return;
+  }
+
+  const first = rows[0];
+  const latest = rows[rows.length - 1];
+  summary.textContent = activeRange
+    ? `Last ${activeRange} years: ${rows.length.toLocaleString()} of ${total.toLocaleString()} rows, ${first.date} to ${latest.date}`
+    : `All data: ${rows.length.toLocaleString()} rows, ${first.date} to ${latest.date}`;
+}
+
+function drawOverviewChart(flaggedRows = null, criteria = loadCriteria()) {
+  const rows = Array.isArray(flaggedRows)
+    ? flaggedRows
+    : addRollingFlags(attachMarketSeries(loadHistory()), criteria);
+  const rangeYears = loadChartRangeYears();
+  const visibleRows = filterRowsForChartRange(rows, rangeYears);
+  renderChartRangeControls(rangeYears, visibleRows, rows.length);
+  drawOpportunityChart(visibleRows, criteria);
+}
+
+function drawOpportunityChart(rows, criteria = loadCriteria()) {
+  const canvas = $("historyChart");
+  if (!canvas) return;
+  chartHoverMarkers = [];
+  hideChartTooltip();
+
+  const rect = canvas.getBoundingClientRect();
+  const width = Math.max(320, Math.floor(rect.width || canvas.clientWidth || 960));
+  const height = Math.max(320, Math.floor(rect.height || 520));
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.floor(width * dpr);
+  canvas.height = Math.floor(height * dpr);
+  canvas.style.height = `${height}px`;
+
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
+  const isDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const textColor = isDark ? "#e5e7eb" : "#1f2937";
+  const mutedColor = isDark ? "#9ca3af" : "#6b7280";
+  const gridColor = isDark ? "rgba(229,231,235,.18)" : "rgba(31,41,55,.16)";
+  const yearBoundaryColor = isDark ? "rgba(229,231,235,.28)" : "rgba(31,41,55,.24)";
+  const lineColor = "#93c5fd";
+  const spyColor = "#b7791f";
+  const markerColor = "#138a52";
+  const signalPeriodColor = isDark ? "rgba(35, 197, 120, 0.16)" : "rgba(19, 138, 82, 0.13)";
+
+  ctx.fillStyle = isDark ? "#182131" : "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+
+  const pad = { top: 18, right: 62, bottom: 34, left: 46 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const yForValue = value => pad.top + ((100 - value) / 100) * plotH;
+  const xForIndex = index => pad.left + (rows.length <= 1 ? 0 : (index / (rows.length - 1)) * plotW);
+  const spyRows = rows
+    .map((row, index) => ({ row, index }))
+    .filter(item => Number.isFinite(item.row.spy));
+  const spyValues = spyRows.map(item => item.row.spy);
+  const spyMin = spyValues.length ? Math.min(...spyValues) : null;
+  const spyMax = spyValues.length ? Math.max(...spyValues) : null;
+  const spyPadding = spyMin == null || spyMax == null ? 0 : Math.max(1, (spyMax - spyMin) * 0.08);
+  const spyLow = spyMin == null ? null : spyMin - spyPadding;
+  const spyHigh = spyMax == null ? null : spyMax + spyPadding;
+  const yForSpy = value => pad.top + ((spyHigh - value) / (spyHigh - spyLow || 1)) * plotH;
+
+  if (rows.length) {
+    ctx.fillStyle = signalPeriodColor;
+    let startIndex = null;
+    const flushSignalPeriod = endIndex => {
+      if (startIndex == null) return;
+      const left = startIndex === 0
+        ? pad.left
+        : (xForIndex(startIndex - 1) + xForIndex(startIndex)) / 2;
+      const right = endIndex >= rows.length - 1
+        ? width - pad.right
+        : (xForIndex(endIndex) + xForIndex(endIndex + 1)) / 2;
+      ctx.fillRect(left, pad.top, Math.max(1, right - left), plotH);
+      startIndex = null;
+    };
+
+    rows.forEach((row, index) => {
+      if (row.opportunity && startIndex == null) {
+        startIndex = index;
+      } else if (!row.opportunity && startIndex != null) {
+        flushSignalPeriod(index - 1);
+      }
+    });
+    flushSignalPeriod(rows.length - 1);
+  }
+
+  ctx.strokeStyle = gridColor;
+  ctx.lineWidth = 1;
+  ctx.font = "12px system-ui, sans-serif";
+  ctx.textBaseline = "middle";
+  for (const value of [0, 25, 50, 75, 100]) {
+    const y = yForValue(value);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(width - pad.right, y);
+    ctx.stroke();
+    ctx.fillStyle = mutedColor;
+    ctx.textAlign = "right";
+    ctx.fillText(String(value), pad.left - 8, y);
+  }
+
+  if (!rows.length) {
+    ctx.fillStyle = mutedColor;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "600 16px system-ui, sans-serif";
+    const title = hasPendingDataFetch()
+      ? "Loading market and sentiment history..."
+      : lastFetchError
+        ? "Data load failed"
+        : "No saved data yet";
+    ctx.fillText(title, width / 2, height / 2 - 12);
+    ctx.font = "12px system-ui, sans-serif";
+    const detail = hasPendingDataFetch()
+      ? "The chart will fill automatically when the first fetch completes."
+      : lastFetchError
+        ? "Open Sources for status details or use Refresh now."
+        : "Use Refresh now to fetch data.";
+    ctx.fillText(detail, width / 2, height / 2 + 14);
+    return;
+  }
+
+  const yearTicks = [];
+  let lastYear = "";
+  rows.forEach((row, index) => {
+    const year = row.date.slice(0, 4);
+    if (year !== lastYear) {
+      yearTicks.push({ year, index });
+    }
+    lastYear = year;
+  });
+
+  ctx.strokeStyle = yearBoundaryColor;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  for (const tick of yearTicks) {
+    if (tick.index === 0) continue;
+    const x = Math.round(xForIndex(tick.index)) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x, pad.top);
+    ctx.lineTo(x, pad.top + plotH);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = mutedColor;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  for (const tick of yearTicks) {
+    const x = Math.min(width - pad.right - 12, Math.max(pad.left + 12, xForIndex(tick.index)));
+    ctx.fillText(tick.year, x, height - pad.bottom + 12);
+  }
+
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  rows.forEach((row, index) => {
+    const x = xForIndex(index);
+    const y = yForValue(row.value);
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  if (spyRows.length > 1) {
+    ctx.strokeStyle = spyColor;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    spyRows.forEach((item, plotIndex) => {
+      const x = xForIndex(item.index);
+      const y = yForSpy(item.row.spy);
+      if (plotIndex === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    ctx.fillStyle = mutedColor;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    for (const value of [spyLow, (spyLow + spyHigh) / 2, spyHigh]) {
+      const y = yForSpy(value);
+      ctx.fillText(`$${Math.round(value)}`, width - pad.right + 8, y);
+    }
+
+    ctx.fillStyle = markerColor;
+    ctx.strokeStyle = isDark ? "#182131" : "#ffffff";
+    ctx.lineWidth = 1.5;
+    for (let index = 0; index < rows.length; index++) {
+      const row = rows[index];
+      if (!row.opportunityStart) continue;
+      const spyReference = Number.isFinite(row.spy)
+        ? row.spy
+        : (findPreviousSpyRow(rows, row.date) || findNextSpyRow(rows, row.date))?.spy;
+      if (!Number.isFinite(spyReference)) continue;
+      const x = xForIndex(index);
+      const y = yForSpy(spyReference);
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      chartHoverMarkers.push({
+        x,
+        y,
+        radius: 9,
+        row,
+        marketTicker: loadMarketTicker(),
+        marketPrice: spyReference
+      });
+    }
+  }
+
+  const latest = rows[rows.length - 1];
+  ctx.fillStyle = textColor;
+  ctx.textAlign = "right";
+  ctx.textBaseline = "top";
+  const latestSpy = [...rows].reverse().find(row => Number.isFinite(row.spy));
+  const marketTicker = loadMarketTicker();
+  const spyLabel = latestSpy ? ` | ${marketTicker} ${formatCurrency(latestSpy.spy)} on ${latestSpy.date}` : "";
+  ctx.fillText(`${latest.date}: ${formatNum(latest.value)}${spyLabel}`, width - pad.right, pad.top + 4);
+}
+
+function handleChartPointerMove(event) {
+  const canvas = $("historyChart");
+  if (!canvas) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+  const marker = findNearestChartMarker(x, y);
+
+  if (!marker) {
+    canvas.style.cursor = "";
+    hideChartTooltip();
+    return;
+  }
+
+  canvas.style.cursor = "pointer";
+  showChartTooltip(marker, canvas);
+}
+
+function findNearestChartMarker(x, y) {
+  let nearest = null;
+  let nearestDistance = Infinity;
+
+  for (const marker of chartHoverMarkers) {
+    const distance = ((marker.x - x) ** 2) + ((marker.y - y) ** 2);
+    const radius = marker.radius || 10;
+    if (distance <= radius ** 2 && distance < nearestDistance) {
+      nearest = marker;
+      nearestDistance = distance;
+    }
+  }
+
+  return nearest;
+}
+
+function showChartTooltip(marker, canvas) {
+  const tooltip = $("chartTooltip");
+  const wrap = canvas?.parentElement;
+  if (!tooltip || !wrap) return;
+
+  tooltip.innerHTML = formatChartTooltip(marker);
+  tooltip.style.display = "block";
+
+  const anchorX = canvas.offsetLeft + marker.x;
+  const anchorY = canvas.offsetTop + marker.y;
+  const tooltipRect = tooltip.getBoundingClientRect();
+  const gap = 12;
+  const minLeft = 8;
+  const maxLeft = Math.max(minLeft, wrap.clientWidth - tooltipRect.width - 8);
+  let left = anchorX + gap;
+  let top = anchorY - tooltipRect.height - gap;
+
+  if (top < 8) top = anchorY + gap;
+  if (left > maxLeft) left = anchorX - tooltipRect.width - gap;
+  left = Math.min(maxLeft, Math.max(minLeft, left));
+
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${Math.max(8, top)}px`;
+}
+
+function hideChartTooltip() {
+  const tooltip = $("chartTooltip");
+  const canvas = $("historyChart");
+  if (tooltip) tooltip.style.display = "none";
+  if (canvas) canvas.style.cursor = "";
+}
+
+function formatChartTooltip(marker) {
+  const row = marker.row || {};
+  const marketTicker = marker.marketTicker || loadMarketTicker();
+  const marketPrice = Number.isFinite(marker.marketPrice) ? marker.marketPrice : row.spy;
+  const vixText = Number.isFinite(row.vix) ? formatNum(row.vix) : "n/a";
+  const reason = Array.isArray(row.reasons) && row.reasons.length ? row.reasons.join("; ") : "Signal start";
+  const durationDays = Number.isFinite(row.signalDurationDays) ? row.signalDurationDays : null;
+  const durationText = durationDays == null
+    ? "n/a"
+    : `${durationDays} calendar day${durationDays === 1 ? "" : "s"}${row.signalStillActive ? " so far" : ""}`;
+  const durationRows = Number.isFinite(row.signalDurationRows) ? row.signalDurationRows : null;
+  const rowSpanText = durationRows == null
+    ? ""
+    : ` (${durationRows} saved row${durationRows === 1 ? "" : "s"})`;
+
+  return `
+    <strong>Signal start: ${escapeHtml(row.date || "")}</strong>
+    <div class="chart-tooltip-row"><span>Fear & Greed</span><b>${escapeHtml(formatNum(row.value))}</b></div>
+    <div class="chart-tooltip-row"><span>${escapeHtml(marketTicker)}</span><b>${escapeHtml(formatCurrency(marketPrice))}</b></div>
+    <div class="chart-tooltip-row"><span>VIX</span><b>${escapeHtml(vixText)}</b></div>
+    <div class="chart-tooltip-row"><span>Duration</span><b>${escapeHtml(`${durationText}${rowSpanText}`)}</b></div>
+    <div class="chart-tooltip-reason">${escapeHtml(reason)}</div>
+  `;
+}
+
+function formatNum(x) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return "";
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
+
+function formatCurrency(x) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return "";
+  return `$${n.toFixed(2)}`;
+}
+
+function formatPercent(x) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return "";
+  const sign = n > 0 ? "+" : "";
+  return `${sign}${n.toFixed(2)}%`;
+}
+
+function formatPlainPercent(x) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return "";
+  return `${n.toFixed(2)}%`;
+}
+
+function formatAllocationPercent(x) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return "";
+  return formatPlainPercent(n * 100);
+}
+
+function formatLossMagnitude(x) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return "";
+  if (n === 0) return "0.00%";
+  return `<span class="return-negative">-${n.toFixed(2)}%</span>`;
+}
+
+function formatPlainLossMagnitude(x) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return "";
+  if (n === 0) return "0.00%";
+  return `-${n.toFixed(2)}%`;
+}
+
+function formatProjectionPercent(x) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return "";
+  const klass = n >= 0 ? "return-positive" : "return-negative";
+  return `<span class="${klass}">${formatPercent(n)}</span>`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#039;"
+  }[c]));
+}
+
+function parseJsonFromText(text, label = "response") {
+  const raw = String(text || "").trim();
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(raw.slice(start, end + 1));
+    }
+    throw new Error(`${label} did not contain JSON`);
+  }
+}
+
+async function fetchJson(url) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function fetchText(url) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.text();
+}
+
+async function fetchTextViaProxy(url) {
+  return fetchText(`${CORS_PROXY_ENDPOINT}${encodeURIComponent(url)}`);
+}
+
+async function fetchJsonViaProxy(url) {
+  return fetchJson(`${CORS_PROXY_ENDPOINT}${encodeURIComponent(url)}`);
+}
+
+async function fetchCnnRows() {
+  let payload;
+  try {
+    payload = await fetchJson(CNN_ENDPOINT);
+  } catch (directErr) {
+    setFetchMessage("Direct CNN fetch failed; trying CORS proxy...");
+    try {
+      payload = await fetchJson(`${CORS_PROXY_ENDPOINT}${encodeURIComponent(CNN_ENDPOINT)}`);
+    } catch (proxyErr) {
+      throw new Error(`direct fetch failed (${directErr.message}); proxy fetch failed (${proxyErr.message})`);
+    }
+  }
+
+  return parseCnnFearGreedPayload(payload);
+}
+
+async function fetchYahooMarketChart(ticker = loadMarketTicker()) {
+  const marketTicker = normalizeMarketTicker(ticker);
+  const endpoint = buildYahooChartEndpoint(marketTicker);
+  const readerEndpoint = buildYahooReaderEndpoint(endpoint);
+  try {
+    const text = await fetchText(readerEndpoint);
+    return parseJsonFromText(text, `Yahoo ${marketTicker} reader response`);
+  } catch (readerErr) {
+    try {
+      return await fetchJson(endpoint);
+    } catch (directErr) {
+      try {
+        return await fetchJsonViaProxy(endpoint);
+      } catch (proxyErr) {
+        throw new Error(`reader fetch failed (${readerErr.message}); direct fetch failed (${directErr.message}); proxy fetch failed (${proxyErr.message})`);
+      }
+    }
+  }
+}
+
+async function fetchVixCsv() {
+  return fetchText(VIX_DATA_ENDPOINT);
+}
+
+async function fetchAllData() {
+  const marketTicker = loadMarketTicker();
+  dataFetchInProgress = true;
+  dataFetchAttempted = true;
+  lastFetchError = "";
+  setFetchMessage(`Fetching long history, Yahoo ${marketTicker}, VIX, and live data...`);
+  drawOverviewChart();
+  for (const key of ["spyYahoo", "vix", "history", "cnn"]) {
+    setSourceFetchStatus(key, {
+      state: "pending",
+      detail: "Fetch in progress.",
+      action: "Wait for refresh to finish."
+    });
+  }
+
+  const rows = [];
+  const spyRows = [];
+  const vixRows = [];
+  const warnings = [];
+
+  try {
+    try {
+      const spyPayload = await fetchYahooMarketChart(marketTicker);
+      const parsedSpy = parseYahooMarketChart(spyPayload, marketTicker);
+      spyRows.push(...parsedSpy);
+      const latestSpy = parsedSpy[parsedSpy.length - 1];
+      setSourceFetchStatus("spyYahoo", {
+        state: "ok",
+        detail: `${parsedSpy.length.toLocaleString()} ${marketTicker} rows${latestSpy ? ` through ${latestSpy.date}` : ""}.`,
+        action: "No action needed."
+      });
+    } catch (err) {
+      warnings.push(`Yahoo ${marketTicker} chart fetch failed (${err.message})`);
+      setSourceFetchStatus("spyYahoo", {
+        state: "warn",
+        detail: `Fetch failed: ${err.message}.`,
+        action: `Refresh now to retry Yahoo ${marketTicker} history.`
+      });
+    }
+
+    try {
+      const vixCsv = await fetchVixCsv();
+      const parsedVix = parseVixCsv(vixCsv);
+      vixRows.push(...parsedVix);
+      const latestVix = parsedVix[parsedVix.length - 1];
+      setSourceFetchStatus("vix", {
+        state: "ok",
+        detail: `${parsedVix.length.toLocaleString()} VIX rows${latestVix ? ` through ${latestVix.date}` : ""}.`,
+        action: "No action needed."
+      });
+    } catch (err) {
+      warnings.push(`datasets/finance-vix fetch failed (${err.message})`);
+      setSourceFetchStatus("vix", {
+        state: "warn",
+        detail: `Fetch failed: ${err.message}.`,
+        action: "Refresh now to retry datasets/finance-vix history."
+      });
+    }
+
+    try {
+      const csv = await fetchText(HISTORICAL_DATA_ENDPOINT);
+      const parsedHistory = parseHistoricalCsv(csv);
+      rows.push(...parsedHistory);
+      setSourceFetchStatus("history", {
+        state: "ok",
+        detail: `${parsedHistory.length.toLocaleString()} canonical rows, ${parsedHistory[0].date} to ${parsedHistory[parsedHistory.length - 1].date}.`,
+        action: "No action needed."
+      });
+    } catch (err) {
+      warnings.push(`historical CSV failed (${err.message})`);
+      setSourceFetchStatus("history", {
+        state: "warn",
+        detail: `Fetch failed: ${err.message}.`,
+        action: "Refresh now to retry canonical history."
+      });
+    }
+
+    try {
+      const cnnRows = await fetchCnnRows();
+      rows.push(...cnnRows);
+      setSourceFetchStatus("cnn", {
+        state: "ok",
+        detail: `${cnnRows.length.toLocaleString()} CNN rows, latest ${cnnRows[cnnRows.length - 1].date}.`,
+        action: "No action needed."
+      });
+    } catch (err) {
+      warnings.push(`live CNN fetch failed (${err.message})`);
+      setSourceFetchStatus("cnn", {
+        state: "warn",
+        detail: `Fetch failed: ${err.message}.`,
+        action: "Refresh now to retry; proxy fallback may be needed."
+      });
+    }
+
+    if (!rows.length) {
+      throw new Error(warnings.join("; ") || "no data returned");
+    }
+
+    const merged = saveFetchedRows(rows, spyRows, vixRows, marketTicker);
+    const latest = merged[merged.length - 1];
+    const latestSpy = [...loadSpySeries(marketTicker)].reverse().find(row => Number.isFinite(row.spy));
+    const latestVix = [...merged].reverse().find(row => Number.isFinite(row.vix));
+    const warningText = warnings.length ? ` Warning: ${warnings.join("; ")}.` : "";
+
+    setFetchMessage(
+      `Saved ${merged.length.toLocaleString()} rows from ${merged[0].date} to ${latest.date}. Latest score: ${formatNum(latest.value)}. Latest ${marketTicker}: ${latestSpy ? `${formatCurrency(latestSpy.spy)} on ${latestSpy.date}` : "none"}. Latest VIX: ${latestVix ? `${formatNum(latestVix.vix)} on ${latestVix.date}` : "none"}.${warningText}`
+    );
+  } finally {
+    dataFetchInProgress = false;
+    renderOverviewLoadState(loadHistory());
+    drawOverviewChart();
+  }
+}
+
+function showFetchError(err) {
+  lastFetchError = err.message;
+  setFetchMessage(`Fetch failed: ${err.message}.`);
+  render();
+}
+
+$("refreshBtn").addEventListener("click", async () => {
+  try {
+    await fetchAllData();
+  } catch (err) {
+    showFetchError(err);
+  }
+});
+
+$("clearBtn").addEventListener("click", () => {
+  if (confirm("Clear locally saved Fear & Greed history and market price cache?")) {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(SPY_STORAGE_KEY);
+    localStorage.removeItem(MARKET_SERIES_STORAGE_KEY);
+    for (const key of LEGACY_STORAGE_KEYS) localStorage.removeItem(key);
+    clearOptimizerResults();
+    for (const key of Object.keys(sourceFetchStatus)) delete sourceFetchStatus[key];
+    render();
+  }
+});
+
+$("resetAppBtn").addEventListener("click", () => {
+  if (confirm("Remove all saved Opportunity Radar data and refresh?")) {
+    for (const key of APP_STORAGE_KEYS) localStorage.removeItem(key);
+    location.reload();
+  }
+});
+
+$("saveCriteriaBtn").addEventListener("click", () => {
+  saveCriteria(readCriteriaControls());
+  clearOptimizerResults();
+  render();
+});
+
+$("resetCriteriaBtn").addEventListener("click", () => {
+  saveCriteria(DEFAULT_CRITERIA);
+  clearOptimizerResults();
+  render();
+});
+
+$("marketTickerPreset").addEventListener("change", () => {
+  const preset = $("marketTickerPreset")?.value;
+  const input = $("marketTickerInput");
+  if (input && preset && preset !== "custom") input.value = preset;
+});
+
+$("marketTickerInput").addEventListener("input", () => {
+  const preset = $("marketTickerPreset");
+  const input = $("marketTickerInput");
+  if (!preset || !input || preset.value === "custom") return;
+  const typed = normalizeMarketTicker(input.value);
+  if (typed !== preset.value) preset.value = "custom";
+});
+
+$("saveMarketTickerBtn").addEventListener("click", async () => {
+  const summary = $("marketTickerSummary");
+  let previousTicker;
+  let nextTicker;
+  try {
+    previousTicker = loadMarketTicker();
+    nextTicker = readMarketTickerControls();
+    saveMarketTicker(nextTicker);
+  } catch (err) {
+    if (summary) summary.textContent = `Ticker not saved: ${err.message}`;
+    return;
+  }
+
+  clearOptimizerResults();
+  delete sourceFetchStatus.spyYahoo;
+  render();
+  if (nextTicker !== previousTicker || !loadSpySeries(nextTicker).length) {
+    setFetchMessage(`Market ticker set to ${nextTicker}. Fetching ${nextTicker} history...`);
+    try {
+      await fetchAllData();
+    } catch (err) {
+      showFetchError(err);
+    }
+  }
+});
+
+$("resetMarketTickerBtn").addEventListener("click", async () => {
+  saveMarketTicker(DEFAULT_MARKET_TICKER);
+  clearOptimizerResults();
+  delete sourceFetchStatus.spyYahoo;
+  render();
+  if (!loadSpySeries(DEFAULT_MARKET_TICKER).length) {
+    try {
+      await fetchAllData();
+    } catch (err) {
+      showFetchError(err);
+    }
+  }
+});
+
+$("saveCheckpointsBtn").addEventListener("click", () => {
+  const summary = $("checkpointSummary");
+  try {
+    const checkpoints = parseReturnCheckpointsInput($("checkpointMonthsInput")?.value);
+    saveReturnCheckpoints(checkpoints);
+    clearOptimizerResults();
+    render();
+  } catch (err) {
+    if (summary) summary.textContent = `Checkpoint settings not saved: ${err.message}`;
+  }
+});
+
+$("resetCheckpointsBtn").addEventListener("click", () => {
+  saveReturnCheckpoints(DEFAULT_RETURN_CHECKPOINTS);
+  clearOptimizerResults();
+  render();
+});
+
+$("saveOptimizerSettingsBtn").addEventListener("click", () => {
+  saveOptimizerSettings(readOptimizerSettingsControls());
+  clearOptimizerResults();
+  render();
+});
+
+$("resetOptimizerSettingsBtn").addEventListener("click", () => {
+  saveOptimizerSettings(DEFAULT_OPTIMIZER_SETTINGS);
+  clearOptimizerResults();
+  render();
+});
+
+$("runOptimizerBtn").addEventListener("click", () => {
+  runOptimizer();
+});
+
+$("optimizerWrap").addEventListener("click", event => {
+  const target = event.target instanceof Element ? event.target : null;
+  const button = target?.closest("[data-optimizer-index]");
+  if (!button) return;
+  applyOptimizerCriteria(Number(button.dataset.optimizerIndex));
+});
+
+document.querySelectorAll("[data-chart-years]").forEach(button => {
+  button.addEventListener("click", () => {
+    saveChartRangeYears(button.dataset.chartYears);
+    drawOverviewChart();
+  });
+});
+
+$("historyChart").addEventListener("pointermove", handleChartPointerMove);
+$("historyChart").addEventListener("pointerleave", hideChartTooltip);
+$("historyChart").addEventListener("pointercancel", hideChartTooltip);
+
+document.querySelectorAll(".tab-button").forEach(button => {
+  button.addEventListener("click", () => {
+    const selectedTab = button.dataset.tab;
+
+    document.querySelectorAll(".tab-button").forEach(tab => {
+      tab.setAttribute("aria-selected", String(tab === button));
+    });
+
+    document.querySelectorAll(".tab-panel").forEach(panel => {
+      panel.hidden = panel.dataset.panel !== selectedTab;
+    });
+
+    if (selectedTab === "overview") {
+      drawOverviewChart();
+    }
+  });
+});
+
+window.addEventListener("resize", () => {
+  drawOverviewChart();
+});
+
+renderOptimizerResults(optimizerResults);
+dataFetchInProgress = true;
+dataFetchAttempted = true;
+render();
+fetchAllData().catch(showFetchError);
+</script>
+</body>
+</html>
