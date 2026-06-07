@@ -1,6 +1,6 @@
 # Opportunity Radar
 
-A single-file, browser-only monitor for contrarian opportunity signals based on aggregate Fear & Greed history.
+http://kachurovskiy.com/redalert/ - single-file, browser-only monitor for contrarian opportunity signals based on aggregate Fear & Greed history.
 
 ## What It Does
 
@@ -25,7 +25,7 @@ A single-file, browser-only monitor for contrarian opportunity signals based on 
 
 ## Run Locally
 
-Open `index.html` in a browser.
+Open http://kachurovskiy.com/redalert/ in a browser.
 
 If browser CORS policy blocks the direct CNN request, the page retries through the configured AllOrigins proxy. For a public deployment, replace that proxy with infrastructure you control if you do not want visitors' browsers to contact a third-party proxy.
 
