@@ -788,48 +788,17 @@ const CNN_ENDPOINT = "https://production.dataviz.cnn.io/index/fearandgreed/graph
 const CORS_PROXY_ENDPOINT = "https://api.allorigins.win/raw?url=";
 const DEPRECATED_SENTIMENT_SOURCES = new Set(["history:spy-combined"]);
 const $ = (id) => document.getElementById(id);
-const LEGACY_DEFAULT_CRITERIA = Object.freeze({
-  lowScore: { enabled: true, threshold: 10, days: 2 },
-  sustainedScore: { enabled: true, threshold: 15, days: 5 },
-  vixHigh: { enabled: true, threshold: 35, days: 1 }
-});
-const PRIOR_OPTIMIZED_DEFAULT_CRITERIA = Object.freeze({
-  lowScore: { enabled: true, threshold: 5, days: 3 },
-  sustainedScore: { enabled: true, threshold: 10, days: 10 },
-  vixHigh: { enabled: true, threshold: 40, days: 2 }
-});
-const PRIOR_BALANCED_DEFAULT_CRITERIA = Object.freeze({
-  lowScore: { enabled: true, threshold: 5, days: 1 },
-  sustainedScore: { enabled: true, threshold: 10, days: 5 },
-  vixHigh: { enabled: true, threshold: 40, days: 1 }
-});
-const PRIOR_VALIDATED_DEFAULT_CRITERIA = Object.freeze({
+const DEFAULT_CRITERIA = Object.freeze({
   lowScore: { enabled: true, threshold: 5, days: 3 },
   sustainedScore: { enabled: true, threshold: 20, days: 5 },
   vixHigh: { enabled: true, threshold: 35, days: 1 }
 });
-const DEFAULT_CRITERIA = Object.freeze({
-  lowScore: { enabled: true, threshold: 5, days: 5 },
-  sustainedScore: { enabled: true, threshold: 30, days: 10 },
-  vixHigh: { enabled: true, threshold: 35, days: 1 }
-});
-const PRIOR_DEFAULT_RETURN_CHECKPOINTS = Object.freeze([1, 3, 6, 12]);
 const DEFAULT_RETURN_CHECKPOINTS = Object.freeze([3, 6, 12]);
 const SIGNAL_PROJECTION_CHECKPOINTS = Object.freeze([1, 3, 6, 12]);
 const CHART_RANGE_OPTIONS = Object.freeze([0, 10, 5, 3, 1]);
 const DEFAULT_CHART_RANGE_YEARS = 10;
 const NARROW_CHART_RANGE_YEARS = 1;
 const NARROW_CHART_RANGE_QUERY = "(max-width: 760px)";
-const PRIOR_DEFAULT_OPTIMIZER_SETTINGS = Object.freeze({
-  targetMinPerYear: 2,
-  targetMaxPerYear: 3,
-  recentYears: 6
-});
-const PRIOR_WIDE_OPTIMIZER_SETTINGS = Object.freeze({
-  targetMinPerYear: 2,
-  targetMaxPerYear: 4,
-  recentYears: 7
-});
 const DEFAULT_OPTIMIZER_SETTINGS = Object.freeze({
   targetMinPerYear: 2,
   targetMaxPerYear: 3,
@@ -843,12 +812,6 @@ const OPTIMIZER_VALIDATION_WARNING = Object.freeze({
   validationWinRate: 0.50,
   stabilityScore: 45
 });
-const DEFAULT_MIGRATION_CRITERIA = Object.freeze([
-  LEGACY_DEFAULT_CRITERIA,
-  PRIOR_OPTIMIZED_DEFAULT_CRITERIA,
-  PRIOR_BALANCED_DEFAULT_CRITERIA,
-  PRIOR_VALIDATED_DEFAULT_CRITERIA
-]);
 let optimizerResults = [];
 let optimizerWorkers = [];
 let optimizerRunId = 0;
@@ -999,13 +962,7 @@ function loadCriteria() {
     const raw = localStorage.getItem(CRITERIA_STORAGE_KEY);
     if (!raw) return normalizeCriteria(DEFAULT_CRITERIA);
 
-    const saved = normalizeCriteria(JSON.parse(raw));
-    if (DEFAULT_MIGRATION_CRITERIA.some(criteria => criteriaEqual(saved, criteria))) {
-      saveCriteria(DEFAULT_CRITERIA);
-      return normalizeCriteria(DEFAULT_CRITERIA);
-    }
-
-    return saved;
+    return normalizeCriteria(JSON.parse(raw));
   } catch {
     return normalizeCriteria(DEFAULT_CRITERIA);
   }
@@ -1020,13 +977,7 @@ function loadReturnCheckpoints() {
     const raw = localStorage.getItem(CHECKPOINTS_STORAGE_KEY);
     if (!raw) return [...DEFAULT_RETURN_CHECKPOINTS];
 
-    const saved = normalizeReturnCheckpoints(JSON.parse(raw));
-    if (returnCheckpointsEqual(saved, PRIOR_DEFAULT_RETURN_CHECKPOINTS)) {
-      saveReturnCheckpoints(DEFAULT_RETURN_CHECKPOINTS);
-      return [...DEFAULT_RETURN_CHECKPOINTS];
-    }
-
-    return saved;
+    return normalizeReturnCheckpoints(JSON.parse(raw));
   } catch {
     return [...DEFAULT_RETURN_CHECKPOINTS];
   }
@@ -1036,24 +987,12 @@ function saveReturnCheckpoints(months) {
   localStorage.setItem(CHECKPOINTS_STORAGE_KEY, JSON.stringify(normalizeReturnCheckpoints(months)));
 }
 
-function returnCheckpointsEqual(a, b) {
-  const left = normalizeReturnCheckpoints(a);
-  const right = normalizeReturnCheckpoints(b);
-  return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
 function loadOptimizerSettings() {
   try {
     const raw = localStorage.getItem(OPTIMIZER_SETTINGS_STORAGE_KEY);
     if (!raw) return normalizeOptimizerSettings(DEFAULT_OPTIMIZER_SETTINGS);
 
-    const saved = normalizeOptimizerSettings(JSON.parse(raw));
-    if ([PRIOR_DEFAULT_OPTIMIZER_SETTINGS, PRIOR_WIDE_OPTIMIZER_SETTINGS].some(settings => optimizerSettingsEqual(saved, settings))) {
-      saveOptimizerSettings(DEFAULT_OPTIMIZER_SETTINGS);
-      return normalizeOptimizerSettings(DEFAULT_OPTIMIZER_SETTINGS);
-    }
-
-    return saved;
+    return normalizeOptimizerSettings(JSON.parse(raw));
   } catch {
     return normalizeOptimizerSettings(DEFAULT_OPTIMIZER_SETTINGS);
   }
@@ -1061,14 +1000,6 @@ function loadOptimizerSettings() {
 
 function saveOptimizerSettings(settings) {
   localStorage.setItem(OPTIMIZER_SETTINGS_STORAGE_KEY, JSON.stringify(normalizeOptimizerSettings(settings)));
-}
-
-function optimizerSettingsEqual(a, b) {
-  const left = normalizeOptimizerSettings(a);
-  const right = normalizeOptimizerSettings(b);
-  return left.targetMinPerYear === right.targetMinPerYear
-    && left.targetMaxPerYear === right.targetMaxPerYear
-    && left.recentYears === right.recentYears;
 }
 
 function loadChartRangeYears() {

@@ -10,7 +10,7 @@ http://kachurovskiy.com/redalert/ - single-file, browser-only monitor for contra
 - Merges in the live CNN Fear & Greed graph data on page load.
 - Uses only the aggregate `fear_and_greed.score` and `fear_and_greed_historical.data` fields from CNN.
 - Lets the user edit Fear & Greed and VIX criteria from the Settings tab.
-- Defaults to an optimizer-informed criteria set: score <= 5 for 5 saved rows, score <= 30 for 10 saved rows, or VIX >= 35 for 1 saved row.
+- Defaults to an optimizer-informed criteria set: score <= 5 for 3 saved rows, score <= 20 for 5 saved rows, or VIX >= 35 for 1 saved row.
 - Shows the full-width series chart on the main tab with every year labeled, vertical new-year boundary lines, transparent green signal-period bands, and signal-start markers on the selected ticker line.
 - Starts the Overview chart at 10 years by default on wider screens and 1 year by default on narrow screens, with controls for all data or the last 10, 5, 3, or 1 years.
 - Keeps the current signal summary on a separate tab whose label reports whether a signal is active.
