@@ -338,11 +338,11 @@
       table-layout: fixed;
     }
     #optimizerWrap.table-scroll {
-      overflow-x: hidden;
+      overflow-x: auto;
     }
     .optimizer-table {
       width: 100%;
-      min-width: 0;
+      min-width: 1900px;
       font-size: 0.84rem;
     }
     .optimizer-table th,
@@ -379,6 +379,14 @@
     #optimizerWrap .optimizer-table .deploy-cell { width: 4.6%; }
     #optimizerWrap .optimizer-table .criteria-cell { width: 18%; }
     #optimizerWrap .optimizer-table .action-cell { width: 4%; }
+    .optimizer-table tr.validation-warn td {
+      background: var(--warn-soft);
+    }
+    .optimizer-table button.validation-warn {
+      font-weight: 700;
+      background: var(--warn-soft);
+      box-shadow: inset 0 0 0 1px rgba(190, 120, 0, 0.28);
+    }
     #tableWrap.table-scroll {
       max-height: clamp(320px, calc(100vh - 380px), 680px);
       min-height: 0;
@@ -692,7 +700,7 @@
       <div class="card optimizer-card">
         <h2>Optimizer</h2>
         <p class="muted">
-          Tests candidate Fear & Greed and VIX thresholds against the saved return checkpoints. Ranking rewards higher average returns, higher win rate, smaller average and worst losses, fewer losing forward-return observations, and fit to the target signal cadence. It also estimates the best percent of remaining cash to deploy on each active signal day within each contiguous signal period. Use Apply on any row to choose the tradeoff you prefer.
+          Tests candidate Fear & Greed and VIX thresholds against the saved return checkpoints with expanding walk-forward validation. Ranking now prioritizes later out-of-sample validation performance after each rule's training window, while full-history metrics remain visible for context. It also estimates the best percent of remaining cash to deploy on each active signal day within each contiguous signal period.
         </p>
         <div class="row">
           <button id="runOptimizerBtn" class="primary" type="button">Run optimizer</button>
@@ -740,6 +748,9 @@
         </p>
         <p class="muted">
           The repository notes that older combined Fear & Greed CSVs have been superseded by <code>fear-greed.csv</code>. This app therefore lets the canonical file and live CNN endpoint win for sentiment values while using Yahoo and datasets/finance-vix only for market context.
+        </p>
+        <p class="muted">
+          Source code: <a href="https://github.com/kachurovskiy/redalert" target="_blank" rel="noopener noreferrer">github.com/kachurovskiy/redalert</a>
         </p>
       </div>
     </section>
@@ -792,9 +803,14 @@ const PRIOR_BALANCED_DEFAULT_CRITERIA = Object.freeze({
   sustainedScore: { enabled: true, threshold: 10, days: 5 },
   vixHigh: { enabled: true, threshold: 40, days: 1 }
 });
-const DEFAULT_CRITERIA = Object.freeze({
+const PRIOR_VALIDATED_DEFAULT_CRITERIA = Object.freeze({
   lowScore: { enabled: true, threshold: 5, days: 3 },
   sustainedScore: { enabled: true, threshold: 20, days: 5 },
+  vixHigh: { enabled: true, threshold: 35, days: 1 }
+});
+const DEFAULT_CRITERIA = Object.freeze({
+  lowScore: { enabled: true, threshold: 5, days: 5 },
+  sustainedScore: { enabled: true, threshold: 30, days: 10 },
   vixHigh: { enabled: true, threshold: 35, days: 1 }
 });
 const PRIOR_DEFAULT_RETURN_CHECKPOINTS = Object.freeze([1, 3, 6, 12]);
@@ -809,15 +825,29 @@ const PRIOR_DEFAULT_OPTIMIZER_SETTINGS = Object.freeze({
   targetMaxPerYear: 3,
   recentYears: 6
 });
-const DEFAULT_OPTIMIZER_SETTINGS = Object.freeze({
+const PRIOR_WIDE_OPTIMIZER_SETTINGS = Object.freeze({
   targetMinPerYear: 2,
   targetMaxPerYear: 4,
   recentYears: 7
 });
+const DEFAULT_OPTIMIZER_SETTINGS = Object.freeze({
+  targetMinPerYear: 2,
+  targetMaxPerYear: 3,
+  recentYears: 7
+});
+const WALK_FORWARD_MIN_TRAIN_YEARS = 7;
+const OPTIMIZER_VALIDATION_WARNING = Object.freeze({
+  trainAvgReturn: 5,
+  trainWinRate: 0.60,
+  validationAvgReturn: 0,
+  validationWinRate: 0.50,
+  stabilityScore: 45
+});
 const DEFAULT_MIGRATION_CRITERIA = Object.freeze([
   LEGACY_DEFAULT_CRITERIA,
   PRIOR_OPTIMIZED_DEFAULT_CRITERIA,
-  PRIOR_BALANCED_DEFAULT_CRITERIA
+  PRIOR_BALANCED_DEFAULT_CRITERIA,
+  PRIOR_VALIDATED_DEFAULT_CRITERIA
 ]);
 let optimizerResults = [];
 let optimizerWorkers = [];
@@ -1018,7 +1048,7 @@ function loadOptimizerSettings() {
     if (!raw) return normalizeOptimizerSettings(DEFAULT_OPTIMIZER_SETTINGS);
 
     const saved = normalizeOptimizerSettings(JSON.parse(raw));
-    if (optimizerSettingsEqual(saved, PRIOR_DEFAULT_OPTIMIZER_SETTINGS)) {
+    if ([PRIOR_DEFAULT_OPTIMIZER_SETTINGS, PRIOR_WIDE_OPTIMIZER_SETTINGS].some(settings => optimizerSettingsEqual(saved, settings))) {
       saveOptimizerSettings(DEFAULT_OPTIMIZER_SETTINGS);
       return normalizeOptimizerSettings(DEFAULT_OPTIMIZER_SETTINGS);
     }
@@ -2275,6 +2305,7 @@ function createOptimizerWorker() {
 const DEFAULT_CRITERIA = ${JSON.stringify(DEFAULT_CRITERIA)};
 const DEFAULT_RETURN_CHECKPOINTS = ${JSON.stringify(DEFAULT_RETURN_CHECKPOINTS)};
 const DEFAULT_OPTIMIZER_SETTINGS = ${JSON.stringify(DEFAULT_OPTIMIZER_SETTINGS)};
+const WALK_FORWARD_MIN_TRAIN_YEARS = ${JSON.stringify(WALK_FORWARD_MIN_TRAIN_YEARS)};
 
 ${clampNumber.toString()}
 ${clampInteger.toString()}
@@ -2288,9 +2319,16 @@ ${addCalendarMonths.toString()}
 ${buildForwardReturn.toString()}
 ${buildForwardReturns.toString()}
 ${average.toString()}
+${standardDeviation.toString()}
 ${yearsBetween.toString()}
 ${daysBetweenIso.toString()}
+${cadenceTargetDistance.toString()}
 ${cadenceFitScore.toString()}
+${cadenceGuardScore.toString()}
+${summarizeForwardReturnRows.toString()}
+${scoreForwardReturnStats.toString()}
+${buildWalkForwardValidation.toString()}
+${scoreWalkForwardStability.toString()}
 ${buildDeploymentPeriods.toString()}
 ${simulateDeploymentPeriod.toString()}
 ${scoreDeploymentResult.toString()}
@@ -2633,36 +2671,204 @@ function simulateDeployment(flaggedRows, spySeries, allocationPct, checkpoints =
   };
 }
 
+function summarizeForwardReturnRows(forwardRows, checkpoints = loadReturnCheckpoints(), options = {}) {
+  const months = normalizeReturnCheckpoints(checkpoints);
+  const source = Array.isArray(forwardRows) ? forwardRows : [];
+  const maxExitDate = String(options?.maxExitDate || "");
+  const completeReturns = [];
+  const horizonReturns = months.map(value => ({ months: value, values: [] }));
+  let completedSignalCount = 0;
+
+  for (const row of source) {
+    let hasCompletedReturn = false;
+    const returns = Array.isArray(row?.returns) ? row.returns : [];
+    returns.forEach((result, index) => {
+      const value = result?.pct;
+      const exitDate = String(result?.exit?.date || "");
+      if (maxExitDate && (!exitDate || exitDate >= maxExitDate)) return;
+      if (Number.isFinite(value)) {
+        completeReturns.push(value);
+        if (horizonReturns[index]) horizonReturns[index].values.push(value);
+        hasCompletedReturn = true;
+      }
+    });
+    if (hasCompletedReturn) completedSignalCount += 1;
+  }
+
+  const winCount = completeReturns.filter(value => value > 0).length;
+  const losses = completeReturns.filter(value => value < 0);
+  const lossMagnitudes = losses.map(value => Math.abs(value));
+  const observationCount = completeReturns.length;
+
+  return {
+    signalCount: source.length,
+    completedSignalCount,
+    observationCount,
+    returns: completeReturns,
+    avgReturn: average(completeReturns),
+    checkpointAverages: horizonReturns.map(item => ({
+      months: item.months,
+      avg: average(item.values)
+    })),
+    winRate: observationCount ? winCount / observationCount : NaN,
+    lossRate: observationCount ? losses.length / observationCount : NaN,
+    avgLoss: lossMagnitudes.length ? average(lossMagnitudes) : 0,
+    worstLoss: lossMagnitudes.length ? Math.max(...lossMagnitudes) : 0,
+    worstReturn: observationCount ? Math.min(...completeReturns) : NaN,
+    lossCount: losses.length
+  };
+}
+
+function scoreForwardReturnStats(stats, cadenceScore = 0) {
+  if (!stats || !stats.observationCount) return -9999;
+  const lossRate = Number.isFinite(stats.lossRate)
+    ? stats.lossRate
+    : (stats.lossCount / Math.max(1, stats.observationCount));
+  const downsidePenalty = (lossRate * 2) + (stats.avgLoss * 0.35) + (stats.worstLoss * 0.15);
+  return stats.avgReturn
+    + (stats.winRate * 6)
+    - downsidePenalty
+    + Math.log1p(stats.signalCount)
+    + cadenceScore;
+}
+
+function buildWalkForwardValidation(forwardRows, rows, checkpoints = loadReturnCheckpoints(), optimizerSettings = loadOptimizerSettings()) {
+  const months = normalizeReturnCheckpoints(checkpoints);
+  const settings = normalizeOptimizerSettings(optimizerSettings);
+  const source = Array.isArray(forwardRows) ? forwardRows : [];
+  const firstYear = Number(String(rows?.[0]?.date || "").slice(0, 4));
+  const latestYear = Number(String(rows?.[rows.length - 1]?.date || "").slice(0, 4));
+  const empty = {
+    minTrainYears: WALK_FORWARD_MIN_TRAIN_YEARS,
+    foldCount: 0,
+    firstValidationYear: null,
+    lastValidationYear: null,
+    trainAvgReturn: NaN,
+    trainWinRate: NaN,
+    validationAvgReturn: NaN,
+    validationWinRate: NaN,
+    validationWorstReturn: NaN,
+    validationSignalCount: 0,
+    validationSignalRate: NaN,
+    validationObservationCount: 0,
+    validationLossCount: 0,
+    validationAvgLoss: 0,
+    validationWorstLoss: 0,
+    validationCadenceScore: NaN,
+    validationScore: -9999,
+    stabilityScore: 0,
+    folds: []
+  };
+
+  if (!Number.isInteger(firstYear) || !Number.isInteger(latestYear)) return empty;
+
+  const firstValidationYear = firstYear + WALK_FORWARD_MIN_TRAIN_YEARS;
+  if (latestYear < firstValidationYear) return empty;
+
+  const folds = [];
+  const validationRowsUsed = [];
+
+  for (let validationYear = firstValidationYear; validationYear <= latestYear; validationYear++) {
+    const validationStart = `${validationYear}-01-01`;
+    const validationEnd = `${validationYear + 1}-01-01`;
+    const trainRows = source.filter(row => row.signal?.date < validationStart);
+    const validationRows = source.filter(row => row.signal?.date >= validationStart && row.signal?.date < validationEnd);
+    const trainStats = summarizeForwardReturnRows(trainRows, months, { maxExitDate: validationStart });
+    const validationStats = summarizeForwardReturnRows(validationRows, months);
+
+    if (trainStats.signalCount < 3 || trainStats.observationCount < 6) continue;
+    if (validationStats.signalCount < 1 || validationStats.observationCount < 1) continue;
+
+    folds.push({
+      validationYear,
+      trainAvgReturn: trainStats.avgReturn,
+      trainWinRate: trainStats.winRate,
+      trainSignalCount: trainStats.signalCount,
+      trainObservationCount: trainStats.observationCount,
+      validationAvgReturn: validationStats.avgReturn,
+      validationWinRate: validationStats.winRate,
+      validationWorstReturn: validationStats.worstReturn,
+      validationSignalCount: validationStats.signalCount,
+      validationObservationCount: validationStats.observationCount
+    });
+    validationRowsUsed.push(...validationRows);
+  }
+
+  if (!folds.length) return empty;
+
+  const validationStats = summarizeForwardReturnRows(validationRowsUsed, months);
+  const trainAvgReturn = average(folds.map(fold => fold.trainAvgReturn));
+  const trainWinRate = average(folds.map(fold => fold.trainWinRate));
+  const validationSignalRate = validationStats.signalCount / Math.max(1, folds.length);
+  const validationCadenceScore = cadenceFitScore(validationSignalRate, settings);
+  const stabilityScore = scoreWalkForwardStability({
+    folds,
+    trainAvgReturn,
+    validationAvgReturn: validationStats.avgReturn,
+    validationSignalCount: validationStats.signalCount
+  });
+  const foldPenalty = folds.length < 3 ? (3 - folds.length) * 6 : 0;
+  const validationScore = scoreForwardReturnStats(validationStats, validationCadenceScore)
+    + (stabilityScore * 0.08)
+    - foldPenalty;
+
+  return {
+    minTrainYears: WALK_FORWARD_MIN_TRAIN_YEARS,
+    foldCount: folds.length,
+    firstValidationYear: folds[0].validationYear,
+    lastValidationYear: folds[folds.length - 1].validationYear,
+    trainAvgReturn,
+    trainWinRate,
+    validationAvgReturn: validationStats.avgReturn,
+    validationWinRate: validationStats.winRate,
+    validationWorstReturn: validationStats.worstReturn,
+    validationSignalCount: validationStats.signalCount,
+    validationSignalRate,
+    validationObservationCount: validationStats.observationCount,
+    validationLossCount: validationStats.lossCount,
+    validationAvgLoss: validationStats.avgLoss,
+    validationWorstLoss: validationStats.worstLoss,
+    validationCadenceScore,
+    validationScore,
+    stabilityScore,
+    folds
+  };
+}
+
+function scoreWalkForwardStability(walkForward) {
+  const folds = Array.isArray(walkForward?.folds) ? walkForward.folds : [];
+  if (!folds.length) return 0;
+
+  const validationAverages = folds.map(fold => fold.validationAvgReturn).filter(Number.isFinite);
+  if (!validationAverages.length) return 0;
+
+  const positiveFoldRate = validationAverages.filter(value => value > 0).length / validationAverages.length;
+  const trainAvg = Number(walkForward.trainAvgReturn);
+  const validationAvg = Number(walkForward.validationAvgReturn);
+  const generalizationGap = Number.isFinite(trainAvg) && Number.isFinite(validationAvg)
+    ? Math.max(0, trainAvg - validationAvg)
+    : 20;
+  const dispersion = standardDeviation(validationAverages);
+  const validationSignalCount = Number(walkForward.validationSignalCount);
+  const samplePenalty = (1 - Math.min(1, (Number.isFinite(validationSignalCount) ? validationSignalCount : 0) / 8)) * 10;
+  const score = 100
+    - Math.min(45, generalizationGap * 2.5)
+    - Math.min(25, dispersion * 0.7)
+    - ((1 - positiveFoldRate) * 25)
+    - samplePenalty;
+
+  return clampNumber(score, 0, 100, 0);
+}
+
 function evaluateCriteria(criteria, rows, spySeries, checkpoints = loadReturnCheckpoints(), optimizerSettings = loadOptimizerSettings()) {
   const months = normalizeReturnCheckpoints(checkpoints);
   const settings = normalizeOptimizerSettings(optimizerSettings);
   const flagged = addRollingFlags(rows, criteria);
   const forwardRows = buildForwardReturns(flagged, spySeries, months);
-  const completeReturns = [];
-  const horizonReturns = months.map(value => ({ months: value, values: [] }));
+  const stats = summarizeForwardReturnRows(forwardRows, months);
 
-  for (const row of forwardRows) {
-    row.returns.forEach((result, index) => {
-      const value = result?.pct;
-      if (Number.isFinite(value)) {
-        completeReturns.push(value);
-        horizonReturns[index].values.push(value);
-      }
-    });
-  }
+  if (stats.signalCount < 3 || stats.observationCount < 6) return null;
 
-  const signalCount = forwardRows.length;
-  if (signalCount < 3 || completeReturns.length < 6) return null;
-
-  const avgReturn = average(completeReturns);
-  const winCount = completeReturns.filter(value => value > 0).length;
-  const losses = completeReturns.filter(value => value < 0);
-  const lossMagnitudes = losses.map(value => Math.abs(value));
-  const lossCount = losses.length;
-  const winRate = winCount / completeReturns.length;
-  const lossRate = lossCount / completeReturns.length;
-  const avgLoss = lossMagnitudes.length ? average(lossMagnitudes) : 0;
-  const worstLoss = lossMagnitudes.length ? Math.max(...lossMagnitudes) : 0;
   const firstDate = rows[0]?.date;
   const latestDate = rows[rows.length - 1]?.date;
   const fullYears = firstDate && latestDate ? Math.max(1, yearsBetween(firstDate, latestDate)) : 1;
@@ -2671,44 +2877,68 @@ function evaluateCriteria(criteria, rows, spySeries, checkpoints = loadReturnChe
   const recentYears = recentWindowStart && latestDate ? Math.max(1, yearsBetween(recentWindowStart, latestDate)) : settings.recentYears;
   const recentSignalCount = recentStart
     ? forwardRows.filter(row => row.signal.date >= recentStart).length
-    : signalCount;
-  const signalRate = signalCount / fullYears;
+    : stats.signalCount;
+  const signalRate = stats.signalCount / fullYears;
   const recentSignalRate = recentSignalCount / recentYears;
   const cadenceScore =
     cadenceFitScore(signalRate, settings) +
     (cadenceFitScore(recentSignalRate, settings) * 1.4);
-  const downsidePenalty = (lossRate * 2) + (avgLoss * 0.35) + (worstLoss * 0.15);
-  const score = avgReturn + (winRate * 6) - downsidePenalty + Math.log1p(signalCount) + cadenceScore;
+  const fullScore = scoreForwardReturnStats(stats, cadenceScore);
+  const walkForward = buildWalkForwardValidation(forwardRows, rows, months, settings);
+  const cadenceGuard = cadenceGuardScore(signalRate, recentSignalRate, settings);
+  const score = walkForward.foldCount
+    ? walkForward.validationScore + (fullScore * 0.08) + cadenceGuard
+    : fullScore + cadenceGuard - 30;
 
   return {
     criteria,
     score,
-    signalCount,
+    fullScore,
+    signalCount: stats.signalCount,
     signalRate,
     recentSignalCount,
     recentSignalRate,
     cadenceScore,
-    observationCount: completeReturns.length,
-    avgReturn,
-    checkpointAverages: horizonReturns.map(item => ({
-      months: item.months,
-      avg: average(item.values)
-    })),
-    winRate,
-    avgLoss,
-    worstLoss,
-    lossCount
+    cadenceGuard,
+    observationCount: stats.observationCount,
+    avgReturn: stats.avgReturn,
+    checkpointAverages: stats.checkpointAverages,
+    winRate: stats.winRate,
+    avgLoss: stats.avgLoss,
+    worstLoss: stats.worstLoss,
+    lossCount: stats.lossCount,
+    walkForward
   };
 }
 
-function cadenceFitScore(rate, settings) {
+function cadenceTargetDistance(rate, settings) {
   const s = normalizeOptimizerSettings(settings);
   const value = Number(rate);
-  if (!Number.isFinite(value)) return -12;
-  if (value >= s.targetMinPerYear && value <= s.targetMaxPerYear) return 6;
+  if (!Number.isFinite(value)) return Infinity;
+  if (value >= s.targetMinPerYear && value <= s.targetMaxPerYear) return 0;
 
   const nearest = value < s.targetMinPerYear ? s.targetMinPerYear : s.targetMaxPerYear;
-  return -Math.min(12, Math.abs(value - nearest) * 5);
+  return Math.abs(value - nearest);
+}
+
+function cadenceFitScore(rate, settings) {
+  const distance = cadenceTargetDistance(rate, settings);
+  if (distance === 0) return 8;
+  if (!Number.isFinite(distance)) return -30;
+  return -Math.min(30, 8 + (distance * 14));
+}
+
+function cadenceGuardScore(signalRate, recentSignalRate, settings) {
+  const fullDistance = cadenceTargetDistance(signalRate, settings);
+  const recentDistance = cadenceTargetDistance(recentSignalRate, settings);
+  const fullScore = fullDistance === 0
+    ? 12
+    : -Math.min(80, 8 + (fullDistance * 28));
+  const recentScore = recentDistance === 0
+    ? 18
+    : -Math.min(90, 10 + (recentDistance * 35));
+
+  return fullScore + recentScore;
 }
 
 function renderOptimizerResults(results) {
@@ -2718,10 +2948,16 @@ function renderOptimizerResults(results) {
   const checkpoints = loadReturnCheckpoints();
   const settings = loadOptimizerSettings();
   const marketTicker = loadMarketTicker();
+  const validationRuns = results
+    .map(result => result.walkForward)
+    .filter(walkForward => walkForward?.foldCount);
+  const validationText = validationRuns.length
+    ? ` Walk-forward folds validate ${Math.min(...validationRuns.map(item => item.firstValidationYear))}-${Math.max(...validationRuns.map(item => item.lastValidationYear))} after ${WALK_FORWARD_MIN_TRAIN_YEARS}-year expanding training windows.`
+    : ` No complete walk-forward validation folds were available; ranking falls back to penalized full-history scores.`;
 
   if (summary) {
     summary.textContent = results.length
-      ? `Top ${results.length} candidates ranked by return, win rate, loss count, and ${formatRateRange(settings.targetMinPerYear, settings.targetMaxPerYear)} cadence across ${formatCheckpointList(checkpoints)} checkpoints. Recent cadence uses the last ${settings.recentYears} years. Deployment stats reset capital for each contiguous signal period.`
+      ? `Top ${results.length} candidates ranked primarily by out-of-sample validation return, validation win rate, downside, stability, and fit to the ${formatRateRange(settings.targetMinPerYear, settings.targetMaxPerYear)} cadence target across ${formatCheckpointList(checkpoints)} checkpoints.${validationText} Recent cadence uses the last ${settings.recentYears} years and rules outside the overall or recent cadence target are penalized. Deployment stats reset capital for each contiguous signal period.`
       : `No candidates had enough completed ${marketTicker} forward-return observations. Fetch data first or loosen the search ranges.`;
   }
   if (!wrap) return;
@@ -2732,10 +2968,16 @@ function renderOptimizerResults(results) {
           <tr>
             <th class="rank-cell">Rank</th>
             <th class="score-cell">Score</th>
+            <th class="return-cell">Train avg</th>
+            <th class="return-cell">Val avg</th>
+            <th class="return-cell">Val win</th>
+            <th class="loss-cell">Val worst</th>
+            <th class="count-cell">Val signals</th>
+            <th class="score-cell">Stability</th>
             <th class="count-cell">Signals</th>
             <th class="rate-cell">Signals/yr</th>
             <th class="rate-cell">Recent ${escapeHtml(String(settings.recentYears))}y</th>
-            <th class="return-cell">Avg return</th>
+            <th class="return-cell">Full avg</th>
             ${checkpoints.map(value => `<th class="return-cell">Avg ${escapeHtml(formatCheckpointShort(value))}</th>`).join("")}
             <th class="return-cell">Win rate</th>
             <th class="loss-cell">Losses</th>
@@ -2752,10 +2994,21 @@ function renderOptimizerResults(results) {
         <tbody>
           ${results.map((result, index) => {
             const active = criteriaEqual(activeCriteria, result.criteria);
+            const validationWarning = getOptimizerValidationWarning(result);
+            const rowClass = active ? "ok" : (validationWarning ? "validation-warn" : "");
+            const buttonClass = validationWarning ? ` class="validation-warn"` : "";
+            const buttonTitle = validationWarning ? ` title="${escapeHtml(validationWarning)}"` : "";
+            const buttonText = active ? "Active" : (validationWarning ? "Review" : "Apply");
             return `
-            <tr${active ? ` class="ok"` : ""}>
+            <tr${rowClass ? ` class="${rowClass}"` : ""}>
               <td class="rank-cell">${index + 1}</td>
               <td class="score-cell">${formatNum(result.score)}</td>
+              <td class="return-cell">${formatProjectionPercent(result.walkForward?.trainAvgReturn)}</td>
+              <td class="return-cell">${formatProjectionPercent(result.walkForward?.validationAvgReturn)}</td>
+              <td class="return-cell">${formatPercent(result.walkForward?.validationWinRate * 100)}</td>
+              <td class="loss-cell">${formatProjectionPercent(result.walkForward?.validationWorstReturn)}</td>
+              <td class="count-cell">${formatWalkForwardValidationCount(result.walkForward)}</td>
+              <td class="score-cell">${formatWalkForwardStability(result.walkForward)}</td>
               <td class="count-cell">${result.signalCount}</td>
               <td class="rate-cell">${formatRate(result.signalRate)}</td>
               <td class="rate-cell">${result.recentSignalCount} <span class="cell-note">${formatRate(result.recentSignalRate)}</span></td>
@@ -2770,7 +3023,7 @@ function renderOptimizerResults(results) {
               <td class="deploy-cell">${formatPlainPercent(result.deployment?.avgDeployedCapitalPct)}</td>
               <td class="deploy-cell">${formatDeploymentBuyDays(result.deployment)}</td>
               <td class="criteria-cell">${escapeHtml(describeCriteria(result.criteria).replace(/^Active criteria: /, ""))}</td>
-              <td class="action-cell"><button type="button" data-optimizer-index="${index}"${active || optimizerBusy ? " disabled" : ""}>${active ? "Active" : "Apply"}</button></td>
+              <td class="action-cell"><button type="button" data-optimizer-index="${index}"${buttonClass}${buttonTitle}${active || optimizerBusy ? " disabled" : ""}>${buttonText}</button></td>
             </tr>`;
           }).join("")}
         </tbody>
@@ -2785,6 +3038,77 @@ function formatOptimizerCheckpointCells(result, checkpoints = loadReturnCheckpoi
     .join("");
 }
 
+function formatWalkForwardValidationCount(walkForward) {
+  if (!walkForward?.foldCount) return "";
+  const signals = Number.isFinite(walkForward.validationSignalCount) ? walkForward.validationSignalCount : 0;
+  const observations = Number.isFinite(walkForward.validationObservationCount) ? walkForward.validationObservationCount : 0;
+  return `${signals}<span class="cell-note">${observations} obs</span>`;
+}
+
+function formatWalkForwardStability(walkForward) {
+  if (!walkForward?.foldCount) return "";
+  return `${formatNum(walkForward.stabilityScore)}<span class="cell-note">/100, ${walkForward.foldCount} folds</span>`;
+}
+
+function getOptimizerCadenceWarnings(result, settings = loadOptimizerSettings()) {
+  const s = normalizeOptimizerSettings(settings);
+  const targetText = formatRateRange(s.targetMinPerYear, s.targetMaxPerYear);
+  const warnings = [];
+  const signalRate = Number(result?.signalRate);
+  const recentSignalRate = Number(result?.recentSignalRate);
+
+  if (Number.isFinite(signalRate) && cadenceTargetDistance(signalRate, s) > 0) {
+    warnings.push(`overall ${formatRate(signalRate)} vs ${targetText}`);
+  }
+  if (Number.isFinite(recentSignalRate) && cadenceTargetDistance(recentSignalRate, s) > 0) {
+    warnings.push(`recent ${formatRate(recentSignalRate)} vs ${targetText}`);
+  }
+
+  return warnings;
+}
+
+function getOptimizerValidationWarning(result) {
+  const warnings = [];
+  const cadenceWarnings = getOptimizerCadenceWarnings(result);
+  if (cadenceWarnings.length) {
+    warnings.push(`Outside cadence target: ${cadenceWarnings.join("; ")}.`);
+  }
+
+  const walkForward = result?.walkForward;
+  if (!walkForward?.foldCount) {
+    warnings.push("No complete out-of-sample validation folds are available for this rule.");
+    return warnings.join(" ");
+  }
+
+  const thresholds = OPTIMIZER_VALIDATION_WARNING;
+  const trainAvg = Number(walkForward.trainAvgReturn);
+  const trainWinRate = Number(walkForward.trainWinRate);
+  const validationAvg = Number(walkForward.validationAvgReturn);
+  const validationWinRate = Number(walkForward.validationWinRate);
+  const stabilityScore = Number(walkForward.stabilityScore);
+  const strongTrain = trainAvg >= thresholds.trainAvgReturn && trainWinRate >= thresholds.trainWinRate;
+
+  if (strongTrain) {
+    const weakReasons = [];
+    if (Number.isFinite(validationAvg) && validationAvg < thresholds.validationAvgReturn) {
+      weakReasons.push(`validation avg ${formatPercent(validationAvg)}`);
+    } else if (Number.isFinite(validationAvg) && validationAvg < trainAvg * 0.25) {
+      weakReasons.push(`validation avg far below train avg (${formatPercent(validationAvg)} vs ${formatPercent(trainAvg)})`);
+    }
+    if (Number.isFinite(validationWinRate) && validationWinRate < thresholds.validationWinRate) {
+      weakReasons.push(`validation win rate ${formatPercent(validationWinRate * 100)}`);
+    }
+    if (Number.isFinite(stabilityScore) && stabilityScore < thresholds.stabilityScore) {
+      weakReasons.push(`stability ${formatNum(stabilityScore)}/100`);
+    }
+    if (weakReasons.length) {
+      warnings.push(`Strong in-sample result but weak validation: ${weakReasons.join("; ")}.`);
+    }
+  }
+
+  return warnings.join(" ");
+}
+
 function formatDeploymentBuyDays(deployment) {
   if (!deployment) return "";
   const avg = Number.isFinite(deployment.avgBuyDays) ? formatNum(deployment.avgBuyDays) : "";
@@ -2795,6 +3119,11 @@ function formatDeploymentBuyDays(deployment) {
 function applyOptimizerCriteria(index) {
   const result = optimizerResults[index];
   if (!result) return;
+  const validationWarning = getOptimizerValidationWarning(result);
+
+  if (validationWarning && !confirm(`${validationWarning}\n\nApply this criteria anyway?`)) {
+    return;
+  }
 
   saveCriteria(result.criteria);
   render();
@@ -2806,8 +3135,12 @@ function applyOptimizerCriteria(index) {
     const deployText = result.deployment
       ? ` Suggested deployment: ${formatAllocationPercent(result.deployment.allocationPct)} of remaining cash on each active signal day inside each contiguous signal period; average period return ${formatPercent(result.deployment.avgReturnPct)} across ${result.deployment.observationCount} checkpoint observations, using ${formatNum(result.deployment.avgBuyDays)} buy days per period on average.`
       : "";
+    const walkForward = result.walkForward;
+    const validationText = walkForward?.foldCount
+      ? ` Walk-forward validation: train avg ${formatPercent(walkForward.trainAvgReturn)}, validation avg ${formatPercent(walkForward.validationAvgReturn)}, validation win rate ${formatPercent(walkForward.validationWinRate * 100)}, worst validation return ${formatPercent(walkForward.validationWorstReturn)}, ${walkForward.validationSignalCount} validation signals, stability ${formatNum(walkForward.stabilityScore)}/100.`
+      : " No complete walk-forward validation folds were available.";
     summary.textContent =
-      `Applied rank ${index + 1}: ${result.signalCount} signals (${formatRate(result.signalRate)}), ${result.recentSignalCount} recent (${formatRate(result.recentSignalRate)}), ${formatPercent(result.avgReturn)} average return, ${formatPercent(result.winRate * 100)} win rate, ${formatPlainLossMagnitude(result.avgLoss)} average loss, ${formatPlainLossMagnitude(result.worstLoss)} worst loss.${deployText} ${criteriaText}`;
+      `Applied rank ${index + 1}: ${result.signalCount} signals (${formatRate(result.signalRate)}), ${result.recentSignalCount} recent (${formatRate(result.recentSignalRate)}), ${formatPercent(result.avgReturn)} full-history average return, ${formatPercent(result.winRate * 100)} win rate, ${formatPlainLossMagnitude(result.avgLoss)} average loss, ${formatPlainLossMagnitude(result.worstLoss)} worst loss.${validationText}${deployText} ${criteriaText}`;
   }
 }
 
@@ -2824,6 +3157,14 @@ function median(values) {
   return usable.length % 2
     ? usable[middle]
     : (usable[middle - 1] + usable[middle]) / 2;
+}
+
+function standardDeviation(values) {
+  const usable = values.filter(Number.isFinite);
+  if (usable.length < 2) return 0;
+  const avg = average(usable);
+  const variance = average(usable.map(value => (value - avg) ** 2));
+  return Math.sqrt(variance);
 }
 
 function yearsBetween(startIso, endIso) {
