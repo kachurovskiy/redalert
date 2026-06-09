@@ -246,6 +246,53 @@
       font-weight: 700;
       overflow-wrap: anywhere;
     }
+    .return-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 10px;
+      margin: 14px 0 16px;
+    }
+    .return-stats-grid[hidden] {
+      display: none;
+    }
+    .return-stat-panel {
+      min-width: 0;
+      border-radius: 8px;
+      padding: 12px;
+      background: var(--surface-soft);
+    }
+    .return-stat-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+    .return-stat-heading .cell-note {
+      display: inline;
+      flex: 0 0 auto;
+      margin-top: 0;
+      font-weight: 400;
+    }
+    .return-stat-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 12px;
+      margin: 0;
+    }
+    .return-stat-list div {
+      min-width: 0;
+    }
+    .return-stat-list dt {
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+    .return-stat-list dd {
+      margin: 2px 0 0;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
     .signal-actions {
       margin-top: 14px;
     }
@@ -506,6 +553,9 @@
       .metric-grid {
         grid-template-columns: 1fr;
       }
+      .return-stat-list {
+        grid-template-columns: 1fr;
+      }
       #tableWrap.table-scroll {
         max-height: 620px;
         min-height: 0;
@@ -720,6 +770,7 @@
         <p id="returnsIntro" class="muted">
           Selected ticker returns after each signal start. Exit dates use the first available selected-ticker trading day on or after each target date.
         </p>
+        <div id="returnsStatsWrap" class="return-stats-grid" hidden></div>
         <div id="returnsWrap" class="table-scroll"></div>
       </div>
     </section>
@@ -1906,11 +1957,19 @@ function sourceStateLabel(state) {
 
 function renderReturnsTable(rows, checkpoints = loadReturnCheckpoints()) {
   const wrap = $("returnsWrap");
+  const statsWrap = $("returnsStatsWrap");
   if (!wrap) return;
 
   const marketTicker = loadMarketTicker();
   const months = normalizeReturnCheckpoints(checkpoints);
   const returnRows = buildForwardReturns(rows, buildSpySeries(rows), months);
+
+  if (statsWrap) {
+    const statsHtml = formatForwardReturnStats(returnRows, months);
+    statsWrap.innerHTML = statsHtml;
+    statsWrap.hidden = !statsHtml;
+  }
+
   wrap.innerHTML = returnRows.length
     ? `<table>
         <thead>
@@ -1934,6 +1993,96 @@ function renderReturnsTable(rows, checkpoints = loadReturnCheckpoints()) {
         </tbody>
       </table>`
     : `<p class="muted">No signal starts yet.</p>`;
+}
+
+function formatForwardReturnStats(returnRows, checkpoints = loadReturnCheckpoints()) {
+  const source = Array.isArray(returnRows) ? returnRows : [];
+  if (!source.length) return "";
+
+  return summarizeForwardReturnHorizons(source, checkpoints).map(item => {
+    const pendingText = item.pendingCount
+      ? `${item.pendingCount.toLocaleString()} open/missing`
+      : "all complete";
+    const body = item.count
+      ? `<dl class="return-stat-list">
+          ${formatReturnStatMetric("Samples", `${item.count.toLocaleString()}<span class="cell-note">of ${item.signalCount.toLocaleString()} signals</span>`)}
+          ${formatReturnStatMetric("Win rate", formatReturnStatPlainPercent(item.winRate * 100))}
+          ${formatReturnStatMetric("Median return", formatReturnStatPercent(item.median))}
+          ${formatReturnStatMetric("Average return", formatReturnStatPercent(item.avg))}
+          ${formatReturnStatMetric("Median gain", item.gainCount ? formatReturnStatPercent(item.medianGain) : formatMutedText("No gains"))}
+          ${formatReturnStatMetric("Median loss", item.lossCount ? formatLossMagnitude(item.medianLoss) : formatMutedText("No losses"))}
+          ${formatReturnStatMetric("Best", formatReturnStatPercent(item.best))}
+          ${formatReturnStatMetric("Worst", formatReturnStatPercent(item.worst))}
+        </dl>`
+      : `<p class="muted">No completed samples yet.</p>`;
+
+    return `<section class="return-stat-panel" aria-label="${escapeHtml(formatCheckpointLabel(item.months))} forward return stats">
+      <div class="return-stat-heading">
+        <span>${escapeHtml(formatCheckpointLabel(item.months))}</span>
+        <span class="cell-note">${escapeHtml(pendingText)}</span>
+      </div>
+      ${body}
+    </section>`;
+  }).join("");
+}
+
+function summarizeForwardReturnHorizons(forwardRows, checkpoints = loadReturnCheckpoints()) {
+  const source = Array.isArray(forwardRows) ? forwardRows : [];
+
+  return normalizeReturnCheckpoints(checkpoints).map((monthsValue, index) => {
+    const values = [];
+
+    for (const row of source) {
+      const result = findForwardReturnForMonth(row, monthsValue, index);
+      if (Number.isFinite(result?.pct)) values.push(result.pct);
+    }
+
+    const gains = values.filter(value => value > 0);
+    const losses = values.filter(value => value < 0);
+    const lossMagnitudes = losses.map(value => Math.abs(value));
+
+    return {
+      months: monthsValue,
+      signalCount: source.length,
+      count: values.length,
+      pendingCount: Math.max(0, source.length - values.length),
+      avg: average(values),
+      median: median(values),
+      medianGain: median(gains),
+      medianLoss: median(lossMagnitudes),
+      best: values.length ? Math.max(...values) : NaN,
+      worst: values.length ? Math.min(...values) : NaN,
+      gainCount: gains.length,
+      lossCount: losses.length,
+      winRate: values.length ? gains.length / values.length : NaN
+    };
+  });
+}
+
+function findForwardReturnForMonth(row, months, fallbackIndex) {
+  const returns = Array.isArray(row?.returns) ? row.returns : [];
+  const exact = returns.find(result => result?.months === months);
+  if (exact) return exact;
+
+  const fallback = returns[fallbackIndex] || null;
+  return fallback && fallback.months == null ? fallback : null;
+}
+
+function formatReturnStatMetric(label, valueHtml) {
+  return `<div><dt>${escapeHtml(label)}</dt><dd>${valueHtml || formatMutedText("n/a")}</dd></div>`;
+}
+
+function formatReturnStatPercent(value) {
+  return formatProjectionPercent(value) || formatMutedText("n/a");
+}
+
+function formatReturnStatPlainPercent(value) {
+  const text = formatPlainPercent(value);
+  return text ? escapeHtml(text) : formatMutedText("n/a");
+}
+
+function formatMutedText(text) {
+  return `<span class="muted">${escapeHtml(text)}</span>`;
 }
 
 function renderSignalProjection(rows, latest) {
