@@ -219,9 +219,12 @@
       border-radius: 3px;
     }
     .swatch.line { background: #93c5fd; }
-    .swatch.spy { background: #b7791f; }
+    .swatch.market { background: #b7791f; }
     .swatch.period { background: rgba(19, 138, 82, 0.18); }
     .swatch.marker { background: var(--green); border-radius: 999px; }
+    .swatch.capital-now { background: #2563eb; }
+    .swatch.capital-wait { background: var(--green); }
+    .swatch.capital-contributed { background: var(--muted); }
     .metric-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -248,7 +251,7 @@
     }
     .return-stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
       gap: 10px;
       margin: 14px 0 16px;
     }
@@ -275,22 +278,25 @@
       margin-top: 0;
       font-weight: 400;
     }
-    .return-stat-list {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px 12px;
-      margin: 0;
+    .return-stat-table {
+      margin-top: 0;
+      table-layout: fixed;
+      font-size: 0.84rem;
     }
-    .return-stat-list div {
-      min-width: 0;
+    .return-stat-table th,
+    .return-stat-table td {
+      padding: 6px 5px;
+      vertical-align: top;
     }
-    .return-stat-list dt {
+    .return-stat-table th:first-child,
+    .return-stat-table td:first-child {
+      width: 34%;
       color: var(--muted);
-      font-size: 0.78rem;
-    }
-    .return-stat-list dd {
-      margin: 2px 0 0;
       font-weight: 700;
+    }
+    .return-stat-table th:not(:first-child),
+    .return-stat-table td:not(:first-child) {
+      text-align: right;
       overflow-wrap: anywhere;
     }
     .signal-actions {
@@ -438,6 +444,27 @@
       max-height: clamp(320px, calc(100vh - 380px), 680px);
       min-height: 0;
     }
+    .capital-table {
+      min-width: 1180px;
+      table-layout: fixed;
+    }
+    .capital-table .money-cell,
+    .capital-table .return-cell,
+    .capital-table .count-cell {
+      text-align: right;
+    }
+    .capital-table .date-cell {
+      width: 110px;
+    }
+    .capital-chart-wrap {
+      min-height: 320px;
+      margin-top: 12px;
+    }
+    #capitalStrategyChart {
+      display: block;
+      width: 100%;
+      height: 320px;
+    }
     .progress-row {
       display: flex;
       align-items: center;
@@ -482,6 +509,45 @@
       color: var(--muted);
       font-size: 0.82rem;
       margin-top: 2px;
+    }
+    .stat-compare {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+      vertical-align: middle;
+    }
+    .stat-compare-icon {
+      display: block;
+      width: 6px;
+      height: 6px;
+      flex: 0 0 auto;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .stat-compare-icons {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 8px;
+      height: 1em;
+      gap: 0;
+      flex: 0 0 auto;
+      line-height: 1;
+      vertical-align: middle;
+    }
+    .stat-compare-icons .stat-compare-icon + .stat-compare-icon {
+      margin-top: -2px;
+    }
+    .stat-compare-icon.better {
+      color: var(--green);
+    }
+    .stat-compare-icon.worse {
+      color: var(--danger);
     }
     .return-positive { color: #138a52; }
     .return-negative { color: #b00020; }
@@ -553,7 +619,7 @@
       .metric-grid {
         grid-template-columns: 1fr;
       }
-      .return-stat-list {
+      .return-stats-grid {
         grid-template-columns: 1fr;
       }
       #tableWrap.table-scroll {
@@ -581,6 +647,7 @@
       <button id="tab-criteria" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-criteria" data-tab="criteria">Settings</button>
       <button id="tab-optimizer" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-optimizer" data-tab="optimizer">Optimizer</button>
       <button id="tab-returns" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-returns" data-tab="returns">Returns</button>
+      <button id="tab-capital" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-capital" data-tab="capital">Capital</button>
       <button id="tab-history" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-history" data-tab="history">History</button>
       <button id="tab-sources" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-sources" data-tab="sources">Sources</button>
     </div>
@@ -605,7 +672,7 @@
         </div>
         <div class="legend">
           <span class="legend-item"><span class="swatch line"></span>Fear & Greed score</span>
-          <span class="legend-item"><span class="swatch spy"></span><span id="marketLegendLabel">Market price</span></span>
+          <span class="legend-item"><span class="swatch market"></span><span id="marketLegendLabel">Market adjusted close</span></span>
           <span class="legend-item"><span class="swatch period"></span>Signal active period</span>
           <span class="legend-item"><span class="swatch marker"></span><span id="marketMarkerLabel">Signal start on market price</span></span>
         </div>
@@ -692,7 +759,7 @@
           </div>
           <p id="criteriaSummary" class="muted"></p>
           <p class="muted">
-            "Signal start" is true only on the first row where the opportunity condition turns on after being off on the prior saved row. Fear & Greed rules use only aggregate score values; CNN sub-indicator series are ignored.
+            "Signal start" is true only on the first row where the opportunity condition turns on after being off on the prior saved row. Signal returns enter on the next selected-ticker trading day after the signal date. Fear & Greed rules use only aggregate score values; CNN sub-indicator series are ignored.
           </p>
         </div>
 
@@ -725,6 +792,16 @@
         </div>
 
         <div class="setting-section">
+          <h3>Display</h3>
+          <div class="row">
+            <label class="compact">Percent decimals <input id="percentPrecisionInput" type="number" min="0" max="4" step="1"></label>
+            <button id="savePercentPrecisionBtn" class="primary" type="button">Save display</button>
+            <button id="resetPercentPrecisionBtn" type="button">Reset display</button>
+          </div>
+          <p id="percentPrecisionSummary" class="muted"></p>
+        </div>
+
+        <div class="setting-section">
           <h3>Optimizer cadence</h3>
           <div class="row">
             <label class="compact">Target/year from <input id="optimizerTargetMin" type="number" min="0" max="20" step="0.1"></label>
@@ -750,7 +827,7 @@
       <div class="card optimizer-card">
         <h2>Optimizer</h2>
         <p class="muted">
-          Tests candidate Fear & Greed and VIX thresholds against the saved return checkpoints with expanding walk-forward validation. Ranking now prioritizes later out-of-sample validation performance after each rule's training window, while full-history metrics remain visible for context. It also estimates the best percent of remaining cash to deploy on each active signal day within each contiguous signal period.
+          Tests candidate Fear & Greed and VIX thresholds against the saved return checkpoints with expanding walk-forward validation. Ranking now prioritizes later out-of-sample validation performance after each rule's training window, while full-history metrics remain visible for context. It also estimates the best percent of remaining cash to deploy after each active signal day using one policy path per contiguous signal period.
         </p>
         <div class="row">
           <button id="runOptimizerBtn" class="primary" type="button">Run optimizer</button>
@@ -768,10 +845,27 @@
       <div class="card">
         <h2>Forward returns</h2>
         <p id="returnsIntro" class="muted">
-          Selected ticker returns after each signal start. Exit dates use the first available selected-ticker trading day on or after each target date.
+          Selected ticker returns after each signal start, entering on the next selected-ticker trading day. Exit dates use the first available selected-ticker trading day on or after each entry-based target date. Comparison stats use every selected-ticker trading day in the saved sentiment-history range.
         </p>
         <div id="returnsStatsWrap" class="return-stats-grid" hidden></div>
         <div id="returnsWrap" class="table-scroll"></div>
+      </div>
+    </section>
+
+    <section id="panel-capital" class="tab-panel" role="tabpanel" aria-labelledby="tab-capital" data-panel="capital" hidden>
+      <div class="card">
+        <h2>Capital deployment</h2>
+        <div id="capitalExecutiveSummary" class="source-summary pending"></div>
+        <p id="capitalStrategySummary" class="muted"></p>
+        <div class="capital-chart-wrap">
+          <canvas id="capitalStrategyChart" width="1200" height="320" aria-label="Capital deployment strategy outcome chart"></canvas>
+        </div>
+        <div class="legend">
+          <span class="legend-item"><span class="swatch capital-now"></span>Invest right away</span>
+          <span class="legend-item"><span class="swatch capital-wait"></span>Wait for signal</span>
+          <span class="legend-item"><span class="swatch capital-contributed"></span>Contributed</span>
+        </div>
+        <div id="capitalStrategyWrap" class="table-scroll"></div>
       </div>
     </section>
 
@@ -795,7 +889,7 @@
           Long history is loaded from the canonical <code>fear-greed.csv</code> in <code>whit3rabbit/fear-greed-data</code>, then the live CNN endpoint is merged in for the latest available tail.
         </p>
         <p id="marketSourceText" class="muted">
-          Selected ticker daily close values are loaded automatically from Yahoo Finance's chart endpoint through a browser-readable text proxy. VIX close values are loaded from the datasets/finance-vix daily CSV and can be used by the editable signal criteria.
+          Selected ticker daily adjusted close values are loaded automatically from Yahoo Finance's chart endpoint through a browser-readable text proxy when available, falling back to close values for rows without adjusted close. VIX close values are loaded from the datasets/finance-vix daily CSV and can be used by the editable signal criteria.
         </p>
         <p class="muted">
           The repository notes that older combined Fear & Greed CSVs have been superseded by <code>fear-greed.csv</code>. This app therefore lets the canonical file and live CNN endpoint win for sentiment values while using Yahoo and datasets/finance-vix only for market context.
@@ -810,23 +904,25 @@
 
 <script>
 const STORAGE_KEY = "contrarianOpportunityRadar.history.v1";
-const SPY_STORAGE_KEY = "contrarianOpportunityRadar.spy.v1";
+const LEGACY_SPY_STORAGE_KEY = "contrarianOpportunityRadar.spy.v1";
 const MARKET_SERIES_STORAGE_KEY = "contrarianOpportunityRadar.marketSeries.v1";
 const MARKET_TICKER_STORAGE_KEY = "contrarianOpportunityRadar.marketTicker.v1";
 const CRITERIA_STORAGE_KEY = "contrarianOpportunityRadar.criteria.v1";
 const CHECKPOINTS_STORAGE_KEY = "contrarianOpportunityRadar.returnCheckpoints.v1";
 const OPTIMIZER_SETTINGS_STORAGE_KEY = "contrarianOpportunityRadar.optimizerSettings.v1";
 const CHART_RANGE_STORAGE_KEY = "contrarianOpportunityRadar.chartRange.v1";
+const PERCENT_PRECISION_STORAGE_KEY = "contrarianOpportunityRadar.percentPrecision.v1";
 const LEGACY_STORAGE_KEYS = ["marketPanicTripwire.history.v1", "cnnFearGreedHistory.v2"];
 const APP_STORAGE_KEYS = Object.freeze([
   STORAGE_KEY,
-  SPY_STORAGE_KEY,
+  LEGACY_SPY_STORAGE_KEY,
   MARKET_SERIES_STORAGE_KEY,
   MARKET_TICKER_STORAGE_KEY,
   CRITERIA_STORAGE_KEY,
   CHECKPOINTS_STORAGE_KEY,
   OPTIMIZER_SETTINGS_STORAGE_KEY,
   CHART_RANGE_STORAGE_KEY,
+  PERCENT_PRECISION_STORAGE_KEY,
   ...LEGACY_STORAGE_KEYS
 ]);
 const HISTORICAL_DATA_ENDPOINT = "https://raw.githubusercontent.com/whit3rabbit/fear-greed-data/main/fear-greed.csv";
@@ -850,6 +946,10 @@ const CHART_RANGE_OPTIONS = Object.freeze([0, 10, 5, 3, 1]);
 const DEFAULT_CHART_RANGE_YEARS = 10;
 const NARROW_CHART_RANGE_YEARS = 1;
 const NARROW_CHART_RANGE_QUERY = "(max-width: 760px)";
+const DEFAULT_PERCENT_PRECISION = 0;
+const MAX_PERCENT_PRECISION = 4;
+const MONTHLY_CAPITAL_CONTRIBUTION = 1000;
+const CAPITAL_START_STEP_MONTHS = 6;
 const DEFAULT_OPTIMIZER_SETTINGS = Object.freeze({
   targetMinPerYear: 2,
   targetMaxPerYear: 3,
@@ -871,6 +971,7 @@ let dataFetchInProgress = false;
 let dataFetchAttempted = false;
 let lastFetchError = "";
 let chartHoverMarkers = [];
+let capitalStrategyRows = [];
 const sourceFetchStatus = {};
 
 function todayLocalISODate() {
@@ -959,18 +1060,18 @@ function saveMarketSeriesCache(cache) {
   localStorage.setItem(MARKET_SERIES_STORAGE_KEY, JSON.stringify(cache || {}));
 }
 
-function loadSpySeries(ticker = loadMarketTicker()) {
+function loadMarketSeries(ticker = loadMarketTicker()) {
   const marketTicker = normalizeMarketTicker(ticker);
   try {
     const cache = loadMarketSeriesCache();
-    const cachedRows = normalizeSpyRows(cache[marketTicker] || []);
+    const cachedRows = normalizeMarketRows(cache[marketTicker] || []);
     if (cachedRows.length) return cachedRows;
 
     if (marketTicker === DEFAULT_MARKET_TICKER) {
-      const legacyRaw = localStorage.getItem(SPY_STORAGE_KEY);
-      const legacyRows = normalizeSpyRows(legacyRaw ? JSON.parse(legacyRaw) : []);
+      const legacyRaw = localStorage.getItem(LEGACY_SPY_STORAGE_KEY);
+      const legacyRows = normalizeMarketRows(legacyRaw ? JSON.parse(legacyRaw) : []);
       if (legacyRows.length) {
-        saveSpySeries(legacyRows, marketTicker);
+        saveMarketSeries(legacyRows, marketTicker);
         return legacyRows;
       }
     }
@@ -981,30 +1082,53 @@ function loadSpySeries(ticker = loadMarketTicker()) {
   }
 }
 
-function saveSpySeries(rows, ticker = loadMarketTicker()) {
+function saveMarketSeries(rows, ticker = loadMarketTicker()) {
   const marketTicker = normalizeMarketTicker(ticker);
   const cache = loadMarketSeriesCache();
-  cache[marketTicker] = normalizeSpyRows(rows);
+  cache[marketTicker] = normalizeMarketRows(rows);
   saveMarketSeriesCache(cache);
 }
 
-function normalizeSpyRows(rows) {
+function normalizeMarketRows(rows) {
   const byDate = new Map();
   for (const row of rows || []) {
     const date = String(row.date || "").slice(0, 10);
-    const spy = row.spy === "" || row.spy == null ? null : Number(row.spy);
-    if (date && Number.isFinite(spy) && spy > 0) {
-      byDate.set(date, { date, spy });
+    const rawPrice = row.price ?? row.marketClose ?? row.spy;
+    const price = rawPrice === "" || rawPrice == null ? null : Number(rawPrice);
+    if (date && Number.isFinite(price) && price > 0) {
+      byDate.set(date, {
+        date,
+        price,
+        priceKind: normalizeMarketPriceKind(row.priceKind || row.priceType || row.kind)
+      });
     }
   }
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function attachMarketSeries(rows, marketSeries = loadSpySeries()) {
-  const marketByDate = new Map(normalizeSpyRows(marketSeries).map(row => [row.date, row.spy]));
+function normalizeMarketPriceKind(kind) {
+  const value = String(kind || "").toLowerCase().replace(/[\s_-]+/g, "");
+  return value.includes("adjust") ? "adjustedClose" : "close";
+}
+
+function formatMarketPriceKind(kind) {
+  return normalizeMarketPriceKind(kind) === "adjustedClose" ? "adjusted close" : "close";
+}
+
+function describeMarketPriceKind(rows) {
+  const source = Array.isArray(rows) ? rows : [];
+  if (!source.length) return "adjusted close";
+  const kinds = new Set(source.map(row => normalizeMarketPriceKind(row.priceKind)));
+  if (kinds.has("adjustedClose") && kinds.has("close")) return "adjusted close where available, close otherwise";
+  return kinds.has("adjustedClose") ? "adjusted close" : "close";
+}
+
+function attachMarketSeries(rows, marketSeries = loadMarketSeries()) {
+  const marketByDate = new Map(normalizeMarketRows(marketSeries).map(row => [row.date, row]));
   return (rows || []).map(row => ({
     ...row,
-    spy: marketByDate.has(row.date) ? marketByDate.get(row.date) : null
+    price: marketByDate.get(row.date)?.price ?? null,
+    priceKind: marketByDate.get(row.date)?.priceKind || ""
   }));
 }
 
@@ -1038,6 +1162,19 @@ function saveReturnCheckpoints(months) {
   localStorage.setItem(CHECKPOINTS_STORAGE_KEY, JSON.stringify(normalizeReturnCheckpoints(months)));
 }
 
+function loadPercentPrecision() {
+  try {
+    const raw = localStorage.getItem(PERCENT_PRECISION_STORAGE_KEY);
+    return raw == null ? DEFAULT_PERCENT_PRECISION : normalizePercentPrecision(raw);
+  } catch {
+    return DEFAULT_PERCENT_PRECISION;
+  }
+}
+
+function savePercentPrecision(value) {
+  localStorage.setItem(PERCENT_PRECISION_STORAGE_KEY, String(normalizePercentPrecision(value)));
+}
+
 function loadOptimizerSettings() {
   try {
     const raw = localStorage.getItem(OPTIMIZER_SETTINGS_STORAGE_KEY);
@@ -1069,6 +1206,10 @@ function saveChartRangeYears(years) {
 function normalizeChartRangeYears(years) {
   const value = Number(years);
   return CHART_RANGE_OPTIONS.includes(value) ? value : getDefaultChartRangeYears();
+}
+
+function normalizePercentPrecision(value) {
+  return clampInteger(value, 0, MAX_PERCENT_PRECISION, DEFAULT_PERCENT_PRECISION);
 }
 
 function getDefaultChartRangeYears() {
@@ -1353,6 +1494,7 @@ function parseYahooMarketChart(payload, ticker = loadMarketTicker()) {
   const result = payload?.chart?.result?.[0];
   const timestamps = Array.isArray(result?.timestamp) ? result.timestamp : [];
   const closeValues = result?.indicators?.quote?.[0]?.close;
+  const adjCloseValues = result?.indicators?.adjclose?.[0]?.adjclose;
   if (!timestamps.length || !Array.isArray(closeValues)) {
     throw new Error(`Yahoo ${marketTicker} chart payload did not include timestamp and close arrays`);
   }
@@ -1360,30 +1502,38 @@ function parseYahooMarketChart(payload, ticker = loadMarketTicker()) {
   const rows = [];
   for (let index = 0; index < timestamps.length; index++) {
     const date = parseDateish(timestamps[index]);
-    const spy = Number(closeValues[index]);
-    if (date && Number.isFinite(spy) && spy > 0) {
-      rows.push({ date, spy, source: `market:yahoo-chart:${marketTicker}` });
+    const adjustedPrice = Number(adjCloseValues?.[index]);
+    const closePrice = Number(closeValues[index]);
+    const price = Number.isFinite(adjustedPrice) && adjustedPrice > 0
+      ? adjustedPrice
+      : closePrice;
+    if (date && Number.isFinite(price) && price > 0) {
+      rows.push({
+        date,
+        price,
+        priceKind: Number.isFinite(adjustedPrice) && adjustedPrice > 0 ? "adjustedClose" : "close",
+        source: `market:yahoo-chart:${marketTicker}`
+      });
     }
   }
 
   if (!rows.length) {
-    throw new Error(`Yahoo ${marketTicker} chart payload did not contain usable close values`);
+    throw new Error(`Yahoo ${marketTicker} chart payload did not contain usable price values`);
   }
 
   return rows.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function saveFetchedRows(newRows, newSpyRows = [], newVixRows = [], marketTicker = loadMarketTicker()) {
+function saveFetchedRows(newRows, newMarketRows = [], newVixRows = [], marketTicker = loadMarketTicker()) {
   const existing = loadHistory();
-  const spyByDate = new Map();
+  const priceByDate = new Map();
   const vixByDate = new Map();
-  for (const row of loadSpySeries(marketTicker)) {
-    const date = String(row.date || "").slice(0, 10);
-    const spy = row.spy === "" || row.spy == null ? null : Number(row.spy);
-    if (date && Number.isFinite(spy) && spy > 0) {
-      spyByDate.set(date, spy);
-    }
-  }
+  const addMarketRow = row => {
+    const normalized = normalizeMarketRows([row])[0];
+    if (normalized) priceByDate.set(normalized.date, normalized);
+  };
+
+  for (const row of loadMarketSeries(marketTicker)) addMarketRow(row);
   for (const row of [...existing, ...newRows]) {
     const date = String(row.date || "").slice(0, 10);
     const vix = row.vix === "" || row.vix == null ? null : Number(row.vix);
@@ -1391,13 +1541,7 @@ function saveFetchedRows(newRows, newSpyRows = [], newVixRows = [], marketTicker
       vixByDate.set(date, vix);
     }
   }
-  for (const row of newSpyRows) {
-    const date = String(row.date || "").slice(0, 10);
-    const spy = row.spy === "" || row.spy == null ? null : Number(row.spy);
-    if (date && Number.isFinite(spy) && spy > 0) {
-      spyByDate.set(date, spy);
-    }
-  }
+  for (const row of newMarketRows) addMarketRow(row);
   for (const row of newVixRows) {
     const date = String(row.date || "").slice(0, 10);
     const vix = row.vix === "" || row.vix == null ? null : Number(row.vix);
@@ -1406,7 +1550,7 @@ function saveFetchedRows(newRows, newSpyRows = [], newVixRows = [], marketTicker
     }
   }
 
-  saveSpySeries([...spyByDate].map(([date, spy]) => ({ date, spy })), marketTicker);
+  saveMarketSeries([...priceByDate.values()], marketTicker);
 
   const merged = normalizeRows([...existing, ...newRows]).map(r => ({
     ...r,
@@ -1523,9 +1667,10 @@ function renderOverviewLoadState(rows = loadHistory()) {
 
 function render() {
   const marketTicker = loadMarketTicker();
-  const rows = attachMarketSeries(loadHistory(), loadSpySeries(marketTicker));
+  const rows = attachMarketSeries(loadHistory(), loadMarketSeries(marketTicker));
   const criteria = loadCriteria();
   const checkpoints = loadReturnCheckpoints();
+  const percentPrecision = loadPercentPrecision();
   const optimizerSettings = loadOptimizerSettings();
   const flagged = addRollingFlags(rows, criteria);
   const latest = flagged[flagged.length - 1];
@@ -1561,6 +1706,7 @@ function render() {
   renderCriteriaControls(criteria);
   renderMarketTickerControls(marketTicker);
   renderCheckpointControls(checkpoints);
+  renderPercentPrecisionControls(percentPrecision);
   renderOptimizerSettingsControls(optimizerSettings);
   renderSignalProjection(flagged, latest);
   renderSourceStatus(rows);
@@ -1572,7 +1718,7 @@ function render() {
           <tr>
             <th>Date</th>
             <th>Fear & Greed</th>
-            <th>${escapeHtml(marketTicker)} price</th>
+            <th>${escapeHtml(marketTicker)} ${escapeHtml(describeMarketPriceKind(loadMarketSeries(marketTicker)))}</th>
             <th>VIX</th>
             <th>Opportunity active?</th>
             <th>Signal start?</th>
@@ -1585,7 +1731,7 @@ function render() {
             <tr>
               <td>${escapeHtml(r.date)}</td>
               <td>${formatNum(r.value)}</td>
-              <td>${r.spy == null ? "" : formatCurrency(r.spy)}</td>
+              <td>${r.price == null ? "" : formatCurrency(r.price)}</td>
               <td>${r.vix == null ? "" : formatNum(r.vix)}</td>
               <td>${r.opportunity ? `<span class="pill">YES</span>` : "No"}</td>
               <td>${r.opportunityStart ? `<span class="pill">YES</span>` : "No"}</td>
@@ -1597,6 +1743,7 @@ function render() {
     : `<p class="muted">No saved rows.</p>`;
 
   renderReturnsTable(flagged, checkpoints);
+  renderCapitalStrategies(flagged);
   drawOverviewChart(flagged, criteria);
 }
 
@@ -1647,6 +1794,8 @@ function readCriteriaControls() {
 
 function renderMarketTickerControls(ticker = loadMarketTicker()) {
   const marketTicker = normalizeMarketTicker(ticker);
+  const marketSeries = loadMarketSeries(marketTicker);
+  const priceKindText = describeMarketPriceKind(marketSeries);
   const preset = $("marketTickerPreset");
   const input = $("marketTickerInput");
   const summary = $("marketTickerSummary");
@@ -1658,17 +1807,17 @@ function renderMarketTickerControls(ticker = loadMarketTicker()) {
   if (preset) preset.value = MARKET_TICKER_PRESETS.includes(marketTicker) ? marketTicker : "custom";
   if (input) input.value = marketTicker;
   if (summary) {
-    summary.textContent = `Active ticker: ${marketTicker}. Used for the chart overlay, historical forward returns, and optimizer calculations.`;
+    summary.textContent = `Active ticker: ${marketTicker}. Yahoo ${priceKindText} values are used for the chart overlay, historical forward returns, and optimizer calculations.`;
   }
-  if (legend) legend.textContent = `${marketTicker} price`;
+  if (legend) legend.textContent = `${marketTicker} ${priceKindText}`;
   if (marker) marker.textContent = `Signal start on ${marketTicker}`;
   if (returnsIntro) {
     returnsIntro.textContent =
-      `${marketTicker} returns after each signal start. Exit dates use the first available ${marketTicker} trading day on or after each target date.`;
+      `${marketTicker} returns after each signal start, entering on the next ${marketTicker} trading day. Exit dates use the first available ${marketTicker} trading day on or after each entry-based target date. Comparison stats use every ${marketTicker} trading day in the saved sentiment-history range.`;
   }
   if (marketSourceText) {
     marketSourceText.textContent =
-      `${marketTicker} daily close values are loaded automatically from Yahoo Finance's chart endpoint through a browser-readable text proxy. VIX close values are loaded from the datasets/finance-vix daily CSV and can be used by the editable signal criteria.`;
+      `${marketTicker} daily adjusted close values are loaded automatically from Yahoo Finance's chart endpoint through a browser-readable text proxy when available, falling back to close values for rows without adjusted close. VIX close values are loaded from the datasets/finance-vix daily CSV and can be used by the editable signal criteria.`;
   }
 }
 
@@ -1690,6 +1839,27 @@ function renderCheckpointControls(checkpoints) {
     summary.textContent =
       `Active checkpoints: ${formatCheckpointList(months)}. The optimizer uses these same horizons.`;
   }
+}
+
+function renderPercentPrecisionControls(value = loadPercentPrecision()) {
+  const precision = normalizePercentPrecision(value);
+  const input = $("percentPrecisionInput");
+  const summary = $("percentPrecisionSummary");
+
+  if (input) input.value = precision;
+  if (summary) {
+    summary.textContent =
+      `Percent values use ${precision} decimal place${precision === 1 ? "" : "s"}.`;
+  }
+}
+
+function readPercentPrecisionControls() {
+  return normalizePercentPrecision($("percentPrecisionInput")?.value);
+}
+
+function rerenderPercentDisplays() {
+  render();
+  renderOptimizerResults(optimizerResults);
 }
 
 function renderOptimizerSettingsControls(settings) {
@@ -1801,8 +1971,8 @@ function buildSourceStatusRows(rows) {
   const latestSentiment = historyRows[historyRows.length - 1] || null;
   const firstSentiment = historyRows[0] || null;
   const marketTicker = loadMarketTicker();
-  const spySeries = loadSpySeries(marketTicker);
-  const latestSpy = [...spySeries].reverse().find(row => Number.isFinite(row.spy));
+  const marketSeries = loadMarketSeries(marketTicker);
+  const latestMarket = [...marketSeries].reverse().find(row => Number.isFinite(row.price));
   const latestVix = [...historyRows].reverse().find(row => Number.isFinite(row.vix));
   const staleDays = 10;
 
@@ -1821,7 +1991,7 @@ function buildSourceStatusRows(rows) {
       latestSentiment ? `Latest saved sentiment date: ${latestSentiment.date}.` : "No live tail saved yet.",
       "Refresh now; if blocked, the page retries through the configured CORS proxy."
     ),
-    buildSpyStatusRow(latestSentiment, latestSpy, staleDays, marketTicker),
+    buildMarketStatusRow(latestSentiment, latestMarket, staleDays, marketTicker),
     buildVixStatusRow(latestSentiment, latestVix, staleDays),
     buildFetchStatusRow(
       "Canonical history CSV",
@@ -1860,8 +2030,8 @@ function buildFetchStatusRow(name, key, fallbackDetail, fallbackAction) {
   };
 }
 
-function buildSpyStatusRow(latestSentiment, latestSpy, staleDays, marketTicker = loadMarketTicker()) {
-  const fetchStatus = sourceFetchStatus.spyYahoo;
+function buildMarketStatusRow(latestSentiment, latestMarket, staleDays, marketTicker = loadMarketTicker()) {
+  const fetchStatus = sourceFetchStatus.marketYahoo;
   const sourceName = `Yahoo ${marketTicker} chart`;
   if (fetchStatus?.state === "pending") {
     return {
@@ -1881,7 +2051,7 @@ function buildSpyStatusRow(latestSentiment, latestSpy, staleDays, marketTicker =
     };
   }
 
-  if (!latestSpy) {
+  if (!latestMarket) {
     return {
       name: sourceName,
       state: fetchStatus?.state === "warn" ? "warn" : "pending",
@@ -1890,12 +2060,12 @@ function buildSpyStatusRow(latestSentiment, latestSpy, staleDays, marketTicker =
     };
   }
 
-  const lag = daysBetweenIso(latestSpy.date, latestSentiment.date);
+  const lag = daysBetweenIso(latestMarket.date, latestSentiment.date);
   if (lag > staleDays) {
     return {
       name: sourceName,
       state: "warn",
-      detail: `Latest ${marketTicker} ${latestSpy.date}; latest sentiment ${latestSentiment.date}; lag ${lag} days.`,
+      detail: `Latest ${marketTicker} ${formatMarketPriceKind(latestMarket.priceKind)} ${latestMarket.date}; latest sentiment ${latestSentiment.date}; lag ${lag} days.`,
       action: `Refresh now; if Yahoo fetch keeps failing, ${marketTicker} returns may be stale.`
     };
   }
@@ -1903,7 +2073,7 @@ function buildSpyStatusRow(latestSentiment, latestSpy, staleDays, marketTicker =
   return {
     name: sourceName,
     state: fetchStatus?.state === "warn" ? "warn" : "ok",
-    detail: fetchStatus?.detail || `Latest ${marketTicker} ${latestSpy.date}; latest sentiment ${latestSentiment.date}.`,
+    detail: fetchStatus?.detail || `Latest ${marketTicker} ${formatMarketPriceKind(latestMarket.priceKind)} ${latestMarket.date}; latest sentiment ${latestSentiment.date}.`,
     action: fetchStatus?.state === "warn" ? fetchStatus.action : "No action needed."
   };
 }
@@ -1962,10 +2132,15 @@ function renderReturnsTable(rows, checkpoints = loadReturnCheckpoints()) {
 
   const marketTicker = loadMarketTicker();
   const months = normalizeReturnCheckpoints(checkpoints);
-  const returnRows = buildForwardReturns(rows, buildSpySeries(rows), months);
+  const marketSeries = buildMarketSeries(rows);
+  const returnRows = buildForwardReturns(rows, marketSeries, months);
 
   if (statsWrap) {
-    const statsHtml = formatForwardReturnStats(returnRows, months);
+    const latestHistoryDate = rows[rows.length - 1]?.date || "";
+    const maxExitOptions = latestHistoryDate ? { maxExitDate: latestHistoryDate } : {};
+    const signalStats = summarizeForwardReturnHorizons(returnRows, months, maxExitOptions);
+    const benchmarkStats = summarizeUnconditionalForwardReturnHorizons(marketSeries, rows, months, maxExitOptions);
+    const statsHtml = formatForwardReturnStats(signalStats, benchmarkStats);
     statsWrap.innerHTML = statsHtml;
     statsWrap.hidden = !statsHtml;
   }
@@ -1995,68 +2170,131 @@ function renderReturnsTable(rows, checkpoints = loadReturnCheckpoints()) {
     : `<p class="muted">No signal starts yet.</p>`;
 }
 
-function formatForwardReturnStats(returnRows, checkpoints = loadReturnCheckpoints()) {
-  const source = Array.isArray(returnRows) ? returnRows : [];
-  if (!source.length) return "";
+function formatForwardReturnStats(signalStats, benchmarkStats) {
+  const percentComparison = {
+    strongAbs: 2,
+    strongRel: 0.25,
+    strongMinAbs: 1,
+    relativeFloor: 1
+  };
+  const winRateComparison = {
+    strongAbs: 0.10,
+    strongRel: 0.25,
+    strongMinAbs: 0.05,
+    relativeFloor: 0.05
+  };
+  const signalByMonth = new Map((signalStats || []).map(item => [item.months, item]));
+  const benchmarkByMonth = new Map((benchmarkStats || []).map(item => [item.months, item]));
+  const months = [...new Set([...signalByMonth.keys(), ...benchmarkByMonth.keys()])].sort((a, b) => a - b);
+  if (!months.length) return "";
+  const hasAnySource = months.some(monthsValue => {
+    const signal = signalByMonth.get(monthsValue);
+    const benchmark = benchmarkByMonth.get(monthsValue);
+    return (signal?.sourceCount || 0) > 0 || (benchmark?.sourceCount || 0) > 0;
+  });
+  if (!hasAnySource) return "";
 
-  return summarizeForwardReturnHorizons(source, checkpoints).map(item => {
-    const pendingText = item.pendingCount
-      ? `${item.pendingCount.toLocaleString()} open/missing`
-      : "all complete";
-    const body = item.count
-      ? `<dl class="return-stat-list">
-          ${formatReturnStatMetric("Samples", `${item.count.toLocaleString()}<span class="cell-note">of ${item.signalCount.toLocaleString()} signals</span>`)}
-          ${formatReturnStatMetric("Win rate", formatReturnStatPlainPercent(item.winRate * 100))}
-          ${formatReturnStatMetric("Median return", formatReturnStatPercent(item.median))}
-          ${formatReturnStatMetric("Average return", formatReturnStatPercent(item.avg))}
-          ${formatReturnStatMetric("Median gain", item.gainCount ? formatReturnStatPercent(item.medianGain) : formatMutedText("No gains"))}
-          ${formatReturnStatMetric("Median loss", item.lossCount ? formatLossMagnitude(item.medianLoss) : formatMutedText("No losses"))}
-          ${formatReturnStatMetric("Best", formatReturnStatPercent(item.best))}
-          ${formatReturnStatMetric("Worst", formatReturnStatPercent(item.worst))}
-        </dl>`
-      : `<p class="muted">No completed samples yet.</p>`;
+  return months.map(monthsValue => {
+    const signal = signalByMonth.get(monthsValue) || buildForwardReturnStatSummary(monthsValue, 0, []);
+    const benchmark = benchmarkByMonth.get(monthsValue) || buildForwardReturnStatSummary(monthsValue, 0, []);
 
-    return `<section class="return-stat-panel" aria-label="${escapeHtml(formatCheckpointLabel(item.months))} forward return stats">
+    return `<section class="return-stat-panel" aria-label="${escapeHtml(formatCheckpointLabel(monthsValue))} forward return stats">
       <div class="return-stat-heading">
-        <span>${escapeHtml(formatCheckpointLabel(item.months))}</span>
-        <span class="cell-note">${escapeHtml(pendingText)}</span>
+        <span>${escapeHtml(formatCheckpointLabel(monthsValue))}</span>
+        <span class="cell-note">signal vs always execute</span>
       </div>
-      ${body}
+      <table class="return-stat-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Signal starts</th>
+            <th>Any trading day</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${formatReturnStatRow("Samples", formatReturnStatSamples(signal, "signals"), formatReturnStatSamples(benchmark, "entries"))}
+          ${formatReturnStatRow("Win rate", formatReturnStatWinRate(signal), formatReturnStatWinRate(benchmark), compareCompletedReturnStat(signal, benchmark, "winRate", "higher", winRateComparison))}
+          ${formatReturnStatRow("Average return", formatReturnStatPercent(signal.avg), formatReturnStatPercent(benchmark.avg), compareCompletedReturnStat(signal, benchmark, "avg", "higher", percentComparison))}
+          ${formatReturnStatRow("Median return", formatReturnStatPercent(signal.median), formatReturnStatPercent(benchmark.median), compareCompletedReturnStat(signal, benchmark, "median", "higher", percentComparison))}
+          ${formatReturnStatRow("Median gain", formatReturnStatGain(signal, "medianGain"), formatReturnStatGain(benchmark, "medianGain"), compareOutcomeReturnStat(signal, benchmark, "medianGain", "gainCount", "higher", percentComparison))}
+          ${formatReturnStatRow("Max gain", formatReturnStatGain(signal, "maxGain"), formatReturnStatGain(benchmark, "maxGain"), compareOutcomeReturnStat(signal, benchmark, "maxGain", "gainCount", "higher", percentComparison))}
+          ${formatReturnStatRow("Median loss", formatReturnStatLoss(signal, "medianLoss"), formatReturnStatLoss(benchmark, "medianLoss"), compareOutcomeReturnStat(signal, benchmark, "medianLoss", "lossCount", "lower", percentComparison))}
+          ${formatReturnStatRow("Max loss", formatReturnStatLoss(signal, "maxLoss"), formatReturnStatLoss(benchmark, "maxLoss"), compareOutcomeReturnStat(signal, benchmark, "maxLoss", "lossCount", "lower", percentComparison))}
+        </tbody>
+      </table>
     </section>`;
   }).join("");
 }
 
-function summarizeForwardReturnHorizons(forwardRows, checkpoints = loadReturnCheckpoints()) {
+function summarizeForwardReturnHorizons(forwardRows, checkpoints = loadReturnCheckpoints(), options = {}) {
   const source = Array.isArray(forwardRows) ? forwardRows : [];
+  const maxExitDate = String(options?.maxExitDate || "");
 
   return normalizeReturnCheckpoints(checkpoints).map((monthsValue, index) => {
     const values = [];
 
     for (const row of source) {
       const result = findForwardReturnForMonth(row, monthsValue, index);
+      const exitDate = String(result?.exit?.date || "");
+      if (maxExitDate && (!exitDate || exitDate > maxExitDate)) continue;
       if (Number.isFinite(result?.pct)) values.push(result.pct);
     }
 
-    const gains = values.filter(value => value > 0);
-    const losses = values.filter(value => value < 0);
-    const lossMagnitudes = losses.map(value => Math.abs(value));
-
-    return {
-      months: monthsValue,
-      signalCount: source.length,
-      count: values.length,
-      pendingCount: Math.max(0, source.length - values.length),
-      avg: average(values),
-      median: median(values),
-      medianGain: median(gains),
-      medianLoss: median(lossMagnitudes),
-      best: values.length ? Math.max(...values) : NaN,
-      worst: values.length ? Math.min(...values) : NaN,
-      gainCount: gains.length,
-      lossCount: losses.length,
-      winRate: values.length ? gains.length / values.length : NaN
-    };
+    return buildForwardReturnStatSummary(monthsValue, source.length, values);
   });
+}
+
+function summarizeUnconditionalForwardReturnHorizons(marketSeries, rows, checkpoints = loadReturnCheckpoints(), options = {}) {
+  const series = normalizeMarketRows(marketSeries);
+  const months = normalizeReturnCheckpoints(checkpoints);
+  const historyRows = Array.isArray(rows) ? rows : [];
+  if (!historyRows.length) {
+    return months.map(monthsValue => buildForwardReturnStatSummary(monthsValue, 0, []));
+  }
+
+  const firstHistoryDate = historyRows[0]?.date || series[0]?.date || "";
+  const latestHistoryDate = historyRows[historyRows.length - 1]?.date || series[series.length - 1]?.date || "";
+  const maxExitDate = String(options?.maxExitDate || latestHistoryDate || "");
+  const entries = series
+    .map((row, index) => ({ row, index }))
+    .filter(item => (!firstHistoryDate || item.row.date >= firstHistoryDate) && (!latestHistoryDate || item.row.date <= latestHistoryDate));
+
+  return months.map(monthsValue => {
+    const values = [];
+
+    for (const item of entries) {
+      const targetDate = addCalendarMonths(item.row.date, monthsValue);
+      const exit = findNextMarketRowFromIndex(series, targetDate, item.index);
+      if (exit && (!maxExitDate || exit.date <= maxExitDate)) {
+        values.push(((exit.price - item.row.price) / item.row.price) * 100);
+      }
+    }
+
+    return buildForwardReturnStatSummary(monthsValue, entries.length, values);
+  });
+}
+
+function buildForwardReturnStatSummary(months, sourceCount, values) {
+  const usable = (values || []).filter(Number.isFinite);
+  const gains = usable.filter(value => value > 0);
+  const losses = usable.filter(value => value < 0);
+  const lossMagnitudes = losses.map(value => Math.abs(value));
+
+  return {
+    months,
+    sourceCount,
+    count: usable.length,
+    pendingCount: Math.max(0, sourceCount - usable.length),
+    avg: average(usable),
+    median: median(usable),
+    medianGain: median(gains),
+    maxGain: gains.length ? Math.max(...gains) : NaN,
+    medianLoss: median(lossMagnitudes),
+    maxLoss: lossMagnitudes.length ? Math.max(...lossMagnitudes) : NaN,
+    gainCount: gains.length,
+    lossCount: losses.length,
+    winRate: usable.length ? gains.length / usable.length : NaN
+  };
 }
 
 function findForwardReturnForMonth(row, months, fallbackIndex) {
@@ -2068,12 +2306,135 @@ function findForwardReturnForMonth(row, months, fallbackIndex) {
   return fallback && fallback.months == null ? fallback : null;
 }
 
-function formatReturnStatMetric(label, valueHtml) {
-  return `<div><dt>${escapeHtml(label)}</dt><dd>${valueHtml || formatMutedText("n/a")}</dd></div>`;
+function findNextMarketRowFromIndex(rows, date, minIndex = 0) {
+  let low = Math.max(0, minIndex);
+  let high = rows.length - 1;
+  let foundIndex = rows.length;
+
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (rows[mid].date >= date) {
+      foundIndex = mid;
+      high = mid - 1;
+    } else {
+      low = mid + 1;
+    }
+  }
+
+  for (let i = foundIndex; i < rows.length; i++) {
+    if (Number.isFinite(rows[i].price)) return rows[i];
+  }
+
+  return null;
+}
+
+function formatReturnStatRow(label, signalHtml, benchmarkHtml, comparison = "") {
+  const signalCell = formatReturnStatSignalCell(signalHtml || formatMutedText("n/a"), comparison);
+  return `<tr><td>${escapeHtml(label)}</td><td>${signalCell}</td><td>${benchmarkHtml || formatMutedText("n/a")}</td></tr>`;
+}
+
+function formatReturnStatSignalCell(html, comparison) {
+  const direction = comparison?.startsWith("better")
+    ? "better"
+    : (comparison?.startsWith("worse") ? "worse" : "");
+  if (!direction) return html;
+
+  const isStrong = comparison.endsWith("-strong");
+  const label = direction === "better"
+    ? `Signal starts is ${isStrong ? "much " : ""}better than Any trading day`
+    : `Signal starts is ${isStrong ? "much " : ""}worse than Any trading day`;
+  const path = direction === "better"
+    ? "M1.25 5.25 4 2.5l2.75 2.75"
+    : "M1.25 2.75 4 5.5l2.75-2.75";
+  const icons = Array.from({ length: isStrong ? 2 : 1 }, () =>
+    `<svg class="stat-compare-icon ${direction}" viewBox="0 0 8 8" aria-hidden="true" focusable="false"><path d="${path}"></path></svg>`
+  ).join("");
+
+  return `<span class="stat-compare">${html}<span class="stat-compare-icons" role="img" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${icons}</span></span>`;
+}
+
+function compareCompletedReturnStat(signal, benchmark, key, betterDirection = "higher", options = {}) {
+  if (!Number(signal?.count) || !Number(benchmark?.count)) return "";
+  return compareReturnStatValues(signal?.[key], benchmark?.[key], betterDirection, options);
+}
+
+function compareOutcomeReturnStat(signal, benchmark, key, countKey, betterDirection = "higher", options = {}) {
+  if (!Number(signal?.count) || !Number(benchmark?.count)) return "";
+
+  const signalHasOutcome = Number(signal?.[countKey]) > 0;
+  const benchmarkHasOutcome = Number(benchmark?.[countKey]) > 0;
+
+  if (!signalHasOutcome && !benchmarkHasOutcome) return "";
+  if (!signalHasOutcome || !benchmarkHasOutcome) {
+    const signalValue = signalHasOutcome ? signal?.[key] : 0;
+    const benchmarkValue = benchmarkHasOutcome ? benchmark?.[key] : 0;
+    return compareReturnStatValues(signalValue, benchmarkValue, betterDirection, options);
+  }
+
+  return compareReturnStatValues(signal?.[key], benchmark?.[key], betterDirection, options);
+}
+
+function compareReturnStatValues(signalValue, benchmarkValue, betterDirection = "higher", options = {}) {
+  const signal = Number(signalValue);
+  const benchmark = Number(benchmarkValue);
+  if (!Number.isFinite(signal) || !Number.isFinite(benchmark)) return "";
+  if (Math.abs(signal - benchmark) <= 1e-9) return "";
+
+  const isBetter = betterDirection === "lower"
+    ? signal < benchmark
+    : signal > benchmark;
+  const comparison = isBetter ? "better" : "worse";
+  return isStrongReturnStatComparison(signal, benchmark, options)
+    ? `${comparison}-strong`
+    : comparison;
+}
+
+function isStrongReturnStatComparison(signal, benchmark, options = {}) {
+  const absDiff = Math.abs(signal - benchmark);
+  const strongAbs = Number(options.strongAbs);
+  if (Number.isFinite(strongAbs) && absDiff >= strongAbs) return true;
+
+  const strongRel = Number(options.strongRel);
+  if (!Number.isFinite(strongRel)) return false;
+
+  const strongMinAbs = Number.isFinite(Number(options.strongMinAbs))
+    ? Number(options.strongMinAbs)
+    : 0;
+  if (absDiff < strongMinAbs) return false;
+
+  const relativeFloor = Number.isFinite(Number(options.relativeFloor))
+    ? Number(options.relativeFloor)
+    : 0;
+  const baseline = Math.max(Math.abs(benchmark), relativeFloor);
+  return baseline > 0 && (absDiff / baseline) >= strongRel;
+}
+
+function formatReturnStatSamples(item, sourceLabel) {
+  const sourceCount = Number(item?.sourceCount);
+  if (!Number.isFinite(sourceCount) || sourceCount <= 0) {
+    return formatMutedText(sourceLabel === "signals" ? "No signals" : "No entries");
+  }
+
+  const pending = item.pendingCount
+    ? `${item.pendingCount.toLocaleString()} open/missing`
+    : "all complete";
+  return `${item.count.toLocaleString()}<span class="cell-note">of ${sourceCount.toLocaleString()} ${escapeHtml(sourceLabel)}, ${escapeHtml(pending)}</span>`;
+}
+
+function formatReturnStatWinRate(item) {
+  return item?.count ? formatReturnStatPlainPercent(item.winRate * 100) : formatMutedText("n/a");
 }
 
 function formatReturnStatPercent(value) {
   return formatProjectionPercent(value) || formatMutedText("n/a");
+}
+
+function formatReturnStatGain(item, key) {
+  return item?.gainCount ? formatReturnStatPercent(item[key]) : formatMutedText("No gains");
+}
+
+function formatReturnStatLoss(item, key) {
+  return item?.lossCount ? formatLossMagnitude(item[key]) : formatMutedText("No losses");
 }
 
 function formatReturnStatPlainPercent(value) {
@@ -2096,18 +2457,18 @@ function renderSignalProjection(rows, latest) {
     return;
   }
 
-  const spySeries = buildSpySeries(rows);
-  const entry = findPreviousSpyRow(spySeries, latest.date) || findNextSpyRow(spySeries, latest.date);
-  const projections = buildSignalProjectionStats(rows, latest, spySeries, SIGNAL_PROJECTION_CHECKPOINTS);
+  const marketSeries = buildMarketSeries(rows);
+  const entry = findPreviousMarketRow(marketSeries, latest.date) || findNextMarketRow(marketSeries, latest.date);
+  const projections = buildSignalProjectionStats(rows, latest, marketSeries, SIGNAL_PROJECTION_CHECKPOINTS);
   const maxSampleCount = Math.max(0, ...projections.map(item => item.count));
   const marketTicker = loadMarketTicker();
-  const entryText = entry ? ` Current ${marketTicker} reference: ${formatCurrency(entry.spy)} on ${entry.date}.` : ` No current ${marketTicker} reference is available.`;
+  const entryText = entry ? ` Current ${marketTicker} reference: ${formatCurrency(entry.price)} on ${entry.date}.` : ` No current ${marketTicker} reference is available.`;
   const stateText = latest.opportunity
     ? `Active signal on ${latest.date}.`
     : `No active signal on ${latest.date}.`;
 
   summary.textContent =
-    `${stateText} Historical forward returns below use prior signal starts under the current criteria before ${latest.date}; they are backward-looking samples, not forecasts. ${maxSampleCount.toLocaleString()} samples are available at the most-complete horizon.${entryText}`;
+    `${stateText} Historical forward returns below use prior signal starts under the current criteria before ${latest.date}, entering on the next ${marketTicker} trading day; they are backward-looking samples, not forecasts. ${maxSampleCount.toLocaleString()} samples are available at the most-complete horizon.${entryText}`;
 
   wrap.innerHTML = projections.some(item => item.count)
     ? `<table>
@@ -2136,16 +2497,16 @@ function renderSignalProjection(rows, latest) {
     : `<p class="muted">No completed historical forward returns are available for the current criteria.</p>`;
 }
 
-function buildSignalProjectionStats(rows, latest, spySeries, checkpoints) {
+function buildSignalProjectionStats(rows, latest, marketSeries, checkpoints) {
   const months = normalizeReturnCheckpoints(checkpoints);
   const valuesByMonth = new Map(months.map(value => [value, []]));
 
   for (const row of rows) {
     if (!row.opportunityStart || row.date >= latest.date) continue;
-    const entry = findNextSpyRow(spySeries, row.date);
+    const entry = findEntryAfterSignal(marketSeries, row.date);
     for (const monthsValue of months) {
-      const result = buildForwardReturn(spySeries, row.date, entry, monthsValue);
-      if (Number.isFinite(result.pct)) {
+      const result = buildForwardReturn(marketSeries, row.date, entry, monthsValue);
+      if (Number.isFinite(result.pct) && (!latest.date || result.exit?.date <= latest.date)) {
         valuesByMonth.get(monthsValue).push(result.pct);
       }
     }
@@ -2164,52 +2525,60 @@ function buildSignalProjectionStats(rows, latest, spySeries, checkpoints) {
   });
 }
 
-function buildForwardReturns(rows, spySeries = buildSpySeries(rows), checkpoints = loadReturnCheckpoints()) {
+function buildForwardReturns(rows, marketSeries = buildMarketSeries(rows), checkpoints = loadReturnCheckpoints()) {
   const months = normalizeReturnCheckpoints(checkpoints);
   return rows
     .filter(row => row.opportunityStart)
     .map(signal => {
-      const entry = findNextSpyRow(spySeries, signal.date);
+      const entry = findEntryAfterSignal(marketSeries, signal.date);
       return {
         signal,
         entry,
         returns: months.map(value => ({
           months: value,
-          ...buildForwardReturn(spySeries, signal.date, entry, value)
+          ...buildForwardReturn(marketSeries, signal.date, entry, value)
         }))
       };
     });
 }
 
-function buildForwardReturn(spySeries, signalDate, entry, months) {
-  const targetDate = addCalendarMonths(signalDate, months);
-  if (!entry) return { targetDate, exit: null, pct: null, missingEntry: true };
-  const exit = findNextSpyRow(spySeries, targetDate);
+function buildForwardReturn(marketSeries, _signalDate, entry, months) {
+  if (!entry) return { targetDate: "", exit: null, pct: null, missingEntry: true };
+  const targetDate = addCalendarMonths(entry.date, months);
+  const exit = findNextMarketRow(marketSeries, targetDate);
   if (!exit) return { targetDate, exit: null, pct: null };
 
   return {
     targetDate,
     exit,
-    pct: ((exit.spy - entry.spy) / entry.spy) * 100
+    pct: ((exit.price - entry.price) / entry.price) * 100
   };
 }
 
-function findNextSpyRow(rows, date) {
-  return rows.find(row => row.date >= date && Number.isFinite(row.spy)) || null;
+function findNextMarketRow(rows, date) {
+  return rows.find(row => row.date >= date && Number.isFinite(row.price)) || null;
 }
 
-function findPreviousSpyRow(rows, date) {
+function findEntryAfterSignal(rows, signalDate) {
+  return rows.find(row => row.date > signalDate && Number.isFinite(row.price)) || null;
+}
+
+function findPreviousMarketRow(rows, date) {
   for (let i = rows.length - 1; i >= 0; i--) {
     const row = rows[i];
-    if (row.date <= date && Number.isFinite(row.spy)) return row;
+    if (row.date <= date && Number.isFinite(row.price)) return row;
   }
   return null;
 }
 
-function buildSpySeries(rows) {
-  return normalizeSpyRows([
-    ...loadSpySeries(),
-    ...rows.filter(row => Number.isFinite(row.spy)).map(row => ({ date: row.date, spy: row.spy }))
+function buildMarketSeries(rows) {
+  return normalizeMarketRows([
+    ...loadMarketSeries(),
+    ...rows.filter(row => Number.isFinite(row.price)).map(row => ({
+      date: row.date,
+      price: row.price,
+      priceKind: row.priceKind
+    }))
   ]);
 }
 
@@ -2225,13 +2594,14 @@ function addCalendarMonths(dateIso, months) {
 function formatReturnEndpoint(row) {
   const marketTicker = loadMarketTicker();
   if (!row) return `No ${marketTicker} data`;
-  return `${formatCurrency(row.spy)}<span class="cell-note">${escapeHtml(row.date)}</span>`;
+  return `${formatCurrency(row.price)}<span class="cell-note">${escapeHtml(`${row.date}, ${formatMarketPriceKind(row.priceKind)}`)}</span>`;
 }
 
 function formatReturnCell(result) {
   const marketTicker = loadMarketTicker();
   if (result?.missingEntry) {
-    return `No ${escapeHtml(marketTicker)} data<span class="cell-note">Target ${escapeHtml(result.targetDate)}</span>`;
+    const target = result?.targetDate ? `<span class="cell-note">Target ${escapeHtml(result.targetDate)}</span>` : "";
+    return `No ${escapeHtml(marketTicker)} data${target}`;
   }
 
   if (!result || !result.exit) {
@@ -2240,18 +2610,459 @@ function formatReturnCell(result) {
   }
 
   const klass = result.pct >= 0 ? "return-positive" : "return-negative";
-  return `<span class="${klass}">${formatPercent(result.pct)}</span><span class="cell-note">${escapeHtml(result.exit.date)} ${formatCurrency(result.exit.spy)}</span>`;
+  return `<span class="${klass}">${formatPercent(result.pct)}</span><span class="cell-note">${escapeHtml(result.exit.date)} ${formatCurrency(result.exit.price)} ${escapeHtml(formatMarketPriceKind(result.exit.priceKind))}</span>`;
+}
+
+function renderCapitalStrategies(rows) {
+  const executive = $("capitalExecutiveSummary");
+  const summary = $("capitalStrategySummary");
+  const wrap = $("capitalStrategyWrap");
+  if (!summary || !wrap) return;
+
+  const source = Array.isArray(rows) ? rows : [];
+  const marketTicker = loadMarketTicker();
+  const marketSeries = buildMarketSeries(source);
+  const latestSentimentDate = source[source.length - 1]?.date || "";
+  const valuation = latestSentimentDate
+    ? findPreviousMarketRow(marketSeries, latestSentimentDate)
+    : marketSeries[marketSeries.length - 1];
+
+  if (!source.length || !marketSeries.length || !valuation) {
+    capitalStrategyRows = [];
+    if (executive) {
+      executive.className = "source-summary pending";
+      executive.textContent = "No saved signal and market history is available yet.";
+    }
+    summary.textContent = "No saved signal and market history is available yet.";
+    wrap.innerHTML = "";
+    drawCapitalStrategyChart([]);
+    return;
+  }
+
+  const firstDate = maxIsoDate(source[0]?.date, marketSeries[0]?.date);
+  const rowsByStart = buildCapitalStrategyRows(source, marketSeries, firstDate, valuation);
+  capitalStrategyRows = rowsByStart;
+
+  summary.textContent =
+    `${formatWholeCurrency(MONTHLY_CAPITAL_CONTRIBUTION)} per month, compared from six-month-spaced start dates through ${valuation.date} at ${marketTicker} ${formatCurrency(valuation.price)}. The wait strategy holds cash until the next trading day after a signal start, then deploys all accumulated cash.`;
+  renderCapitalExecutiveSummary(rowsByStart);
+  drawCapitalStrategyChart(rowsByStart);
+
+  wrap.innerHTML = rowsByStart.length
+    ? `<table class="capital-table">
+        <thead>
+          <tr>
+            <th class="date-cell">Start</th>
+            <th class="count-cell">Months</th>
+            <th class="money-cell">Contributed</th>
+            <th class="money-cell">Invest right away</th>
+            <th class="money-cell">Wait for signal</th>
+            <th class="money-cell">Advantage</th>
+            <th class="return-cell">Now max DD</th>
+            <th class="return-cell">Wait max DD</th>
+            <th class="count-cell">Signal buys</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsByStart.map(row => `
+            <tr>
+              <td class="date-cell">${escapeHtml(row.start.date)}</td>
+              <td class="count-cell">${row.months}</td>
+              <td class="money-cell">${formatWholeCurrency(row.totalContributed)}</td>
+              <td class="money-cell">${formatCapitalStrategyValue(row.investNow, row.totalContributed)}</td>
+              <td class="money-cell">${formatCapitalStrategyValue(row.waitForSignal, row.totalContributed)}</td>
+              <td class="money-cell">${formatCapitalAdvantage(row)}</td>
+              <td class="return-cell">${formatCapitalDrawdown(row.investNow.maxDrawdown)}</td>
+              <td class="return-cell">${formatCapitalDrawdown(row.waitForSignal.maxDrawdown)}</td>
+              <td class="count-cell">${formatCapitalSignalBuys(row.waitForSignal)}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`
+    : `<p class="muted">No complete monthly contribution windows are available yet.</p>`;
+}
+
+function buildCapitalStrategyRows(rows, marketSeries, firstDate, valuation) {
+  if (!firstDate || !valuation?.date) return [];
+
+  const signals = buildCapitalSignalEntries(rows, marketSeries, firstDate, valuation.date);
+  const starts = buildCapitalStartRows(marketSeries, firstDate, valuation.date);
+
+  return starts
+    .map(start => simulateCapitalStrategyStart(start, valuation, marketSeries, signals))
+    .filter(row => row.months > 0);
+}
+
+function buildCapitalStartRows(marketSeries, firstDate, valuationDate) {
+  const starts = [];
+  const firstMonth = monthStartIso(firstDate);
+
+  for (let offset = 0; ; offset += CAPITAL_START_STEP_MONTHS) {
+    const targetMonth = addCalendarMonths(firstMonth, offset);
+    const targetDate = offset === 0 && targetMonth < firstDate ? firstDate : targetMonth;
+    if (targetDate > valuationDate) break;
+
+    const start = findNextMarketRow(marketSeries, targetDate);
+    if (!start || start.date > valuationDate) break;
+    if (!starts.length || starts[starts.length - 1].date !== start.date) {
+      starts.push(start);
+    }
+  }
+
+  return starts;
+}
+
+function buildCapitalSignalEntries(rows, marketSeries, firstDate, valuationDate) {
+  return (rows || [])
+    .filter(row => row.opportunityStart && row.date >= firstDate && row.date <= valuationDate)
+    .map(row => {
+      const entry = findEntryAfterSignal(marketSeries, row.date);
+      return entry && entry.date <= valuationDate
+        ? { date: entry.date, price: entry.price, signalDate: row.date }
+        : null;
+    })
+    .filter(Boolean);
+}
+
+function simulateCapitalStrategyStart(start, valuation, marketSeries, signals) {
+  const contributions = buildMonthlyContributionEvents(marketSeries, start.date, valuation.date);
+  const totalContributed = contributions.length * MONTHLY_CAPITAL_CONTRIBUTION;
+  const tradingRows = marketSeries.filter(row =>
+    row.date >= start.date && row.date <= valuation.date && Number.isFinite(row.price)
+  );
+  const investNow = simulateInvestRightAway(contributions, tradingRows, valuation);
+  const waitForSignal = simulateWaitForSignal(contributions, signals, start.date, tradingRows, valuation);
+
+  return {
+    start,
+    months: contributions.length,
+    totalContributed,
+    investNow,
+    waitForSignal
+  };
+}
+
+function buildMonthlyContributionEvents(marketSeries, startDate, valuationDate) {
+  const events = [];
+  const firstMonth = monthStartIso(startDate);
+
+  for (let offset = 0; ; offset++) {
+    const monthDate = addCalendarMonths(firstMonth, offset);
+    const targetDate = offset === 0 && monthDate < startDate ? startDate : monthDate;
+    if (targetDate > valuationDate) break;
+
+    const entry = findNextMarketRow(marketSeries, targetDate);
+    if (!entry || entry.date > valuationDate) break;
+    events.push({
+      type: "contribution",
+      date: entry.date,
+      price: entry.price,
+      amount: MONTHLY_CAPITAL_CONTRIBUTION
+    });
+  }
+
+  return events;
+}
+
+function simulateInvestRightAway(contributions, tradingRows, valuation) {
+  const contributionByDate = groupCapitalContributionsByDate(contributions);
+  let shares = 0;
+  const values = [];
+
+  for (const row of tradingRows) {
+    const contribution = contributionByDate.get(row.date) || 0;
+    if (contribution > 0) shares += contribution / row.price;
+    values.push(shares * row.price);
+  }
+
+  const value = values.length ? values[values.length - 1] : shares * valuation.price;
+  return {
+    shares,
+    cash: 0,
+    value,
+    signalBuys: 0,
+    maxDrawdown: calculateMaxDrawdown(values)
+  };
+}
+
+function simulateWaitForSignal(contributions, signals, startDate, tradingRows, valuation) {
+  const contributionByDate = groupCapitalContributionsByDate(contributions);
+  const signalDates = new Set(signals
+    .filter(signal => signal.date >= startDate && signal.date <= valuation.date)
+    .map(signal => signal.date));
+  let cash = 0;
+  let shares = 0;
+  let signalBuys = 0;
+  const values = [];
+
+  for (const row of tradingRows) {
+    cash += contributionByDate.get(row.date) || 0;
+    if (signalDates.has(row.date) && cash > 0) {
+      shares += cash / row.price;
+      cash = 0;
+      signalBuys += 1;
+    }
+    values.push(shares * row.price + cash);
+  }
+
+  const value = values.length ? values[values.length - 1] : shares * valuation.price + cash;
+  return {
+    shares,
+    cash,
+    value,
+    signalBuys,
+    maxDrawdown: calculateMaxDrawdown(values)
+  };
+}
+
+function groupCapitalContributionsByDate(contributions) {
+  const byDate = new Map();
+  for (const event of contributions || []) {
+    byDate.set(event.date, (byDate.get(event.date) || 0) + event.amount);
+  }
+  return byDate;
+}
+
+function calculateMaxDrawdown(values) {
+  let peak = 0;
+  let maxDrawdown = 0;
+
+  for (const value of values || []) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) continue;
+    peak = Math.max(peak, n);
+    if (peak > 0) {
+      maxDrawdown = Math.max(maxDrawdown, ((peak - n) / peak) * 100);
+    }
+  }
+
+  return maxDrawdown;
+}
+
+function renderCapitalExecutiveSummary(rows) {
+  const executive = $("capitalExecutiveSummary");
+  if (!executive) return;
+
+  const source = Array.isArray(rows) ? rows : [];
+  if (!source.length) {
+    executive.className = "source-summary pending";
+    executive.textContent = "No complete monthly contribution windows are available yet.";
+    return;
+  }
+
+  const advantages = source.map(row => row.waitForSignal.value - row.investNow.value);
+  const waitWins = advantages.filter(value => value > 0.5).length;
+  const nowWins = advantages.filter(value => value < -0.5).length;
+  const ties = source.length - waitWins - nowWins;
+  const avgAdvantage = average(advantages);
+  const bestWaitAdvantage = Math.max(0, Math.max(...advantages));
+  const bestNowAdvantage = Math.max(0, -Math.min(...advantages));
+  const worstNowDrawdown = Math.max(...source.map(row => row.investNow.maxDrawdown || 0));
+  const worstWaitDrawdown = Math.max(...source.map(row => row.waitForSignal.maxDrawdown || 0));
+  const latest = source[source.length - 1];
+  const latestAdvantage = latest.waitForSignal.value - latest.investNow.value;
+  const winnerText = avgAdvantage > 0.5
+    ? `Waiting led by ${formatWholeCurrency(avgAdvantage)} on average.`
+    : avgAdvantage < -0.5
+      ? `Investing right away led by ${formatWholeCurrency(Math.abs(avgAdvantage))} on average.`
+      : "The average ending value was effectively tied.";
+  const latestWinner = latestAdvantage > 0.5
+    ? `waiting led by ${formatWholeCurrency(latestAdvantage)}`
+    : latestAdvantage < -0.5
+      ? `investing right away led by ${formatWholeCurrency(Math.abs(latestAdvantage))}`
+      : "both strategies were effectively tied";
+
+  executive.className = avgAdvantage >= 0 ? "source-summary ok" : "source-summary warn";
+  executive.textContent =
+    `${winnerText} Waiting won ${waitWins} of ${source.length} start dates, investing right away won ${nowWins}${ties ? `, and ${ties} tied` : ""}. Worst max drawdown was ${formatPlainLossMagnitude(worstWaitDrawdown)} for waiting versus ${formatPlainLossMagnitude(worstNowDrawdown)} for investing right away. Largest wait advantage was ${formatWholeCurrency(bestWaitAdvantage)}; largest invest-now advantage was ${formatWholeCurrency(bestNowAdvantage)}. For the most recent start (${latest.start.date}), ${latestWinner}.`;
+}
+
+function formatCapitalStrategyValue(strategy, totalContributed) {
+  const returnPct = totalContributed > 0
+    ? ((strategy.value - totalContributed) / totalContributed) * 100
+    : NaN;
+  const cashNote = strategy.cash > 0.5
+    ? `, ${formatWholeCurrency(strategy.cash)} cash`
+    : "";
+
+  return `${formatWholeCurrency(strategy.value)}<span class="cell-note">${formatProjectionPercent(returnPct)}${escapeHtml(cashNote)}</span>`;
+}
+
+function formatCapitalDrawdown(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return formatMutedText("n/a");
+  return n > 0 ? formatLossMagnitude(n) : "0%";
+}
+
+function drawCapitalStrategyChart(rows = capitalStrategyRows) {
+  const canvas = $("capitalStrategyChart");
+  if (!canvas) return;
+
+  const source = Array.isArray(rows) ? rows : [];
+  const rect = canvas.getBoundingClientRect();
+  const width = Math.max(320, Math.floor(rect.width || canvas.clientWidth || 960));
+  const height = Math.max(260, Math.floor(rect.height || 320));
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.floor(width * dpr);
+  canvas.height = Math.floor(height * dpr);
+  canvas.style.height = `${height}px`;
+
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
+  const isDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const textColor = isDark ? "#e5e7eb" : "#1f2937";
+  const mutedColor = isDark ? "#9ca3af" : "#6b7280";
+  const gridColor = isDark ? "rgba(229,231,235,.18)" : "rgba(31,41,55,.16)";
+  const nowColor = "#2563eb";
+  const waitColor = "#138a52";
+  const contributedColor = mutedColor;
+
+  ctx.fillStyle = isDark ? "#182131" : "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+
+  if (!source.length) {
+    ctx.fillStyle = mutedColor;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "600 15px system-ui, sans-serif";
+    ctx.fillText("No capital strategy windows yet", width / 2, height / 2);
+    return;
+  }
+
+  const values = source.flatMap(row => [
+    row.totalContributed,
+    row.investNow.value,
+    row.waitForSignal.value
+  ]).filter(Number.isFinite);
+  const maxValue = values.length ? Math.max(...values) : 0;
+  const yMax = niceMoneyCeil(maxValue * 1.08);
+  const pad = { top: 18, right: 22, bottom: 42, left: 72 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const xForIndex = index => pad.left + (source.length <= 1 ? plotW / 2 : (index / (source.length - 1)) * plotW);
+  const yForValue = value => pad.top + (1 - (value / (yMax || 1))) * plotH;
+
+  ctx.strokeStyle = gridColor;
+  ctx.lineWidth = 1;
+  ctx.font = "12px system-ui, sans-serif";
+  ctx.textBaseline = "middle";
+  for (let i = 0; i <= 4; i++) {
+    const value = (yMax / 4) * i;
+    const y = yForValue(value);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(width - pad.right, y);
+    ctx.stroke();
+    ctx.fillStyle = mutedColor;
+    ctx.textAlign = "right";
+    ctx.fillText(formatCompactCurrency(value), pad.left - 8, y);
+  }
+
+  const labelStep = Math.max(1, Math.ceil(source.length / 7));
+  ctx.fillStyle = mutedColor;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  source.forEach((row, index) => {
+    if (index % labelStep !== 0 && index !== source.length - 1) return;
+    ctx.fillText(row.start.date.slice(0, 7), xForIndex(index), height - pad.bottom + 12);
+  });
+
+  drawCapitalChartLine(ctx, source, row => row.totalContributed, contributedColor, xForIndex, yForValue, [5, 5]);
+  drawCapitalChartLine(ctx, source, row => row.investNow.value, nowColor, xForIndex, yForValue);
+  drawCapitalChartLine(ctx, source, row => row.waitForSignal.value, waitColor, xForIndex, yForValue);
+
+  ctx.fillStyle = textColor;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.font = "600 13px system-ui, sans-serif";
+  ctx.fillText("Ending account value by start date", pad.left, pad.top);
+}
+
+function drawCapitalChartLine(ctx, rows, valueForRow, color, xForIndex, yForValue, dash = []) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = dash.length ? 1.5 : 2;
+  ctx.setLineDash(dash);
+  ctx.beginPath();
+  rows.forEach((row, index) => {
+    const x = xForIndex(index);
+    const y = yForValue(valueForRow(row));
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  rows.forEach((row, index) => {
+    const x = xForIndex(index);
+    const y = yForValue(valueForRow(row));
+    ctx.beginPath();
+    ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function niceMoneyCeil(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 1000;
+  const magnitude = 10 ** Math.floor(Math.log10(n));
+  const scaled = n / magnitude;
+  const niceScaled = scaled <= 2 ? 2 : scaled <= 5 ? 5 : 10;
+  return niceScaled * magnitude;
+}
+
+function formatCompactCurrency(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  if (Math.abs(n) >= 1000000) return `$${formatNum(n / 1000000)}M`;
+  if (Math.abs(n) >= 1000) return `$${formatNum(n / 1000)}k`;
+  return formatWholeCurrency(n);
+}
+
+function formatCapitalAdvantage(row) {
+  const diff = row.waitForSignal.value - row.investNow.value;
+  if (Math.abs(diff) < 0.5) return formatMutedText("Even");
+
+  const label = diff > 0 ? "Wait" : "Now";
+  const klass = diff > 0 ? "return-positive" : "return-negative";
+  const pct = row.totalContributed > 0 ? (Math.abs(diff) / row.totalContributed) * 100 : NaN;
+  return `<span class="${klass}">${escapeHtml(label)} ${formatWholeCurrency(Math.abs(diff))}</span><span class="cell-note">${formatPlainPercent(pct)} of contributions</span>`;
+}
+
+function formatCapitalSignalBuys(strategy) {
+  const cashNote = strategy.cash > 0.5
+    ? `<span class="cell-note">${formatWholeCurrency(strategy.cash)} cash left</span>`
+    : "";
+  return `${strategy.signalBuys}${cashNote}`;
+}
+
+function formatWholeCurrency(x) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return "";
+  const sign = n < 0 ? "-" : "";
+  return `${sign}$${Math.round(Math.abs(n)).toLocaleString()}`;
+}
+
+function monthStartIso(dateIso) {
+  return `${String(dateIso || "").slice(0, 7)}-01`;
+}
+
+function maxIsoDate(...dates) {
+  return dates.filter(Boolean).sort().pop() || "";
 }
 
 function runOptimizer() {
   const rows = loadHistory();
-  const spySeries = buildSpySeries(rows);
+  const marketSeries = buildMarketSeries(rows);
   const checkpoints = loadReturnCheckpoints();
   const optimizerSettings = loadOptimizerSettings();
 
   cancelOptimizerRun();
 
-  if (!rows.length || !spySeries.length) {
+  if (!rows.length || !marketSeries.length) {
     clearOptimizerResults();
     return;
   }
@@ -2367,7 +3178,7 @@ function runOptimizer() {
 
   try {
     workers.forEach((worker, workerIndex) => {
-      worker.postMessage({ rows, spySeries, checkpoints, optimizerSettings, workerIndex, workerCount });
+      worker.postMessage({ rows, marketSeries, checkpoints, optimizerSettings, workerIndex, workerCount });
     });
   } catch (err) {
     failRun(`Optimizer worker could not receive data: ${err.message}.`);
@@ -2394,7 +3205,8 @@ ${normalizeReturnCheckpoints.toString()}
 ${normalizeCriteria.toString()}
 ${formatNum.toString()}
 ${addRollingFlags.toString()}
-${findNextSpyRow.toString()}
+${findNextMarketRow.toString()}
+${findEntryAfterSignal.toString()}
 ${addCalendarMonths.toString()}
 ${buildForwardReturn.toString()}
 ${buildForwardReturns.toString()}
@@ -2410,6 +3222,8 @@ ${scoreForwardReturnStats.toString()}
 ${buildWalkForwardValidation.toString()}
 ${scoreWalkForwardStability.toString()}
 ${buildDeploymentPeriods.toString()}
+${buildDeploymentPolicyPath.toString()}
+${evaluateDeploymentPathAtExit.toString()}
 ${simulateDeploymentPeriod.toString()}
 ${scoreDeploymentResult.toString()}
 ${simulateDeployment.toString()}
@@ -2419,9 +3233,9 @@ ${optimizeCriteria.toString()}
 
 self.onmessage = event => {
   try {
-    const { rows, spySeries, checkpoints, optimizerSettings, workerIndex, workerCount } = event.data || {};
+    const { rows, marketSeries, checkpoints, optimizerSettings, workerIndex, workerCount } = event.data || {};
     const reportProgress = update => self.postMessage({ ok: true, progress: true, ...update });
-    const results = optimizeCriteria(rows || [], spySeries || [], checkpoints || DEFAULT_RETURN_CHECKPOINTS, optimizerSettings || DEFAULT_OPTIMIZER_SETTINGS, reportProgress, workerIndex || 0, workerCount || 1);
+    const results = optimizeCriteria(rows || [], marketSeries || [], checkpoints || DEFAULT_RETURN_CHECKPOINTS, optimizerSettings || DEFAULT_OPTIMIZER_SETTINGS, reportProgress, workerIndex || 0, workerCount || 1);
     self.postMessage({ ok: true, results });
   } catch (err) {
     self.postMessage({ ok: false, error: err && err.message ? err.message : String(err) });
@@ -2502,8 +3316,8 @@ function hideOptimizerProgress() {
   if (text) text.textContent = "0%";
 }
 
-function optimizeCriteria(rows, spySeries, checkpoints = loadReturnCheckpoints(), optimizerSettings = loadOptimizerSettings(), progress = null, workerIndex = 0, workerCount = 1) {
-  if (!rows.length || !spySeries.length) return [];
+function optimizeCriteria(rows, marketSeries, checkpoints = loadReturnCheckpoints(), optimizerSettings = loadOptimizerSettings(), progress = null, workerIndex = 0, workerCount = 1) {
+  if (!rows.length || !marketSeries.length) return [];
   const months = normalizeReturnCheckpoints(checkpoints);
   const settings = normalizeOptimizerSettings(optimizerSettings);
   const shardCount = clampInteger(workerCount, 1, 64, 1);
@@ -2554,7 +3368,7 @@ function optimizeCriteria(rows, spySeries, checkpoints = loadReturnCheckpoints()
               sustainedScore: { enabled: true, threshold: sustainedThreshold, days: sustainedDayCount },
               vixHigh: vix
             });
-            const result = evaluateCriteria(criteria, rows, spySeries, months, settings);
+            const result = evaluateCriteria(criteria, rows, marketSeries, months, settings);
             if (result) results.push(result);
             checkedCandidates += 1;
             reportProgress("Testing criteria", (checkedCandidates / Math.max(1, workerTotalCandidates)) * 85, checkedCandidates, workerTotalCandidates);
@@ -2573,7 +3387,7 @@ function optimizeCriteria(rows, spySeries, checkpoints = loadReturnCheckpoints()
   const withDeployment = topResults.map((result, index) => {
     const candidate = {
       ...result,
-      deployment: optimizeDeployment(addRollingFlags(rows, result.criteria), spySeries, months)
+      deployment: optimizeDeployment(addRollingFlags(rows, result.criteria), marketSeries, months)
     };
     reportProgress("Optimizing deployment", 85 + (((index + 1) / Math.max(1, deploymentTotal)) * 15), index + 1, deploymentTotal);
     return candidate;
@@ -2586,18 +3400,19 @@ function optimizeCriteria(rows, spySeries, checkpoints = loadReturnCheckpoints()
     .slice(0, 20);
 }
 
-function optimizeDeployment(flaggedRows, spySeries, checkpoints = loadReturnCheckpoints()) {
+function optimizeDeployment(flaggedRows, marketSeries, checkpoints = loadReturnCheckpoints()) {
   const months = normalizeReturnCheckpoints(checkpoints);
   const allocationOptions = [0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.125, 0.15, 0.2, 0.25, 0.33, 0.4, 0.5, 0.6, 0.75, 1];
   let best = null;
 
   for (const allocationPct of allocationOptions) {
-    const result = simulateDeployment(flaggedRows, spySeries, allocationPct, months);
+    const result = simulateDeployment(flaggedRows, marketSeries, allocationPct, months);
     if (!result || !Number.isFinite(result.deploymentScore)) continue;
     if (!best
       || result.deploymentScore > best.deploymentScore
       || (result.deploymentScore === best.deploymentScore && result.avgReturnPct > best.avgReturnPct)
-      || (result.deploymentScore === best.deploymentScore && result.avgReturnPct === best.avgReturnPct && result.allocationPct < best.allocationPct)) {
+      || (result.deploymentScore === best.deploymentScore && result.avgReturnPct === best.avgReturnPct && result.avgAccountReturnPct > best.avgAccountReturnPct)
+      || (result.deploymentScore === best.deploymentScore && result.avgReturnPct === best.avgReturnPct && result.avgAccountReturnPct === best.avgAccountReturnPct && result.allocationPct < best.allocationPct)) {
       best = result;
     }
   }
@@ -2622,62 +3437,33 @@ function buildDeploymentPeriods(flaggedRows) {
   return periods;
 }
 
-function simulateDeploymentPeriod(periodRows, spySeries, allocationPct, checkpoints) {
+function simulateDeploymentPeriod(periodRows, marketSeries, allocationPct, checkpoints) {
   const start = periodRows[0];
   const end = periodRows[periodRows.length - 1];
   if (!start || !end) return null;
 
+  const firstEntry = findEntryAfterSignal(marketSeries, start.date);
+  if (!firstEntry) return null;
+
+  const path = buildDeploymentPolicyPath(periodRows, marketSeries, allocationPct);
+  if (!path?.buyEvents?.length) return null;
+
   const observations = [];
-  let maxBuyCount = 0;
-  let maxDeployed = 0;
-  let firstBuyDate = "";
-  let lastBuyDate = "";
 
   for (const months of checkpoints) {
-    const targetDate = addCalendarMonths(start.date, months);
-    const exit = findNextSpyRow(spySeries, targetDate);
+    const targetDate = addCalendarMonths(firstEntry.date, months);
+    const exit = findNextMarketRow(marketSeries, targetDate);
     if (!exit) continue;
 
-    let cash = 1;
-    let shares = 0;
-    let deployed = 0;
-    let buyCount = 0;
-    let lastPriceDate = "";
-    let periodFirstBuyDate = "";
-    let periodLastBuyDate = "";
+    const evaluated = evaluateDeploymentPathAtExit(path, exit);
+    if (!evaluated) continue;
 
-    for (const row of periodRows) {
-      if (cash <= 0.000001) break;
-      const priceRow = findNextSpyRow(spySeries, row.date);
-      if (!priceRow || priceRow.date > exit.date || priceRow.date === lastPriceDate) continue;
-
-      const amount = cash * allocationPct;
-      if (amount <= 0.000001) continue;
-
-      cash -= amount;
-      shares += amount / priceRow.spy;
-      deployed += amount;
-      buyCount += 1;
-      periodFirstBuyDate ||= priceRow.date;
-      periodLastBuyDate = priceRow.date;
-      lastPriceDate = priceRow.date;
-    }
-
-    if (!buyCount || !shares) continue;
-
-    const value = cash + (shares * exit.spy);
     observations.push({
       months,
       targetDate,
       exitDate: exit.date,
-      returnPct: (value - 1) * 100,
-      deployedCapitalPct: deployed * 100,
-      buyCount
+      ...evaluated
     });
-    maxBuyCount = Math.max(maxBuyCount, buyCount);
-    maxDeployed = Math.max(maxDeployed, deployed);
-    firstBuyDate ||= periodFirstBuyDate;
-    lastBuyDate = periodLastBuyDate || lastBuyDate;
   }
 
   if (!observations.length) return null;
@@ -2686,23 +3472,100 @@ function simulateDeploymentPeriod(periodRows, spySeries, allocationPct, checkpoi
     startDate: start.date,
     endDate: end.date,
     observations,
-    buyCount: maxBuyCount,
-    deployedCapitalPct: maxDeployed * 100,
+    buyCount: path.buyCount,
+    deployedCapitalPct: path.deployedCapitalPct,
+    firstBuyDate: path.firstBuyDate,
+    lastBuyDate: path.lastBuyDate
+  };
+}
+
+function buildDeploymentPolicyPath(periodRows, marketSeries, allocationPct) {
+  const start = periodRows[0];
+  const end = periodRows[periodRows.length - 1];
+  const buyEvents = [];
+  let cash = 1;
+  let deployed = 0;
+  let lastPriceDate = "";
+  let firstBuyDate = "";
+  let lastBuyDate = "";
+
+  for (const row of periodRows || []) {
+    if (cash <= 0.000001) break;
+    const priceRow = findEntryAfterSignal(marketSeries, row.date);
+    if (!priceRow || priceRow.date === lastPriceDate) continue;
+
+    const amount = cash * allocationPct;
+    if (amount <= 0.000001) continue;
+
+    cash -= amount;
+    deployed += amount;
+    buyEvents.push({
+      date: priceRow.date,
+      price: priceRow.price,
+      amount
+    });
+    firstBuyDate ||= priceRow.date;
+    lastBuyDate = priceRow.date;
+    lastPriceDate = priceRow.date;
+  }
+
+  return {
+    startDate: start?.date || "",
+    endDate: end?.date || "",
+    buyEvents,
+    buyCount: buyEvents.length,
+    deployedCapitalPct: deployed * 100,
     firstBuyDate,
     lastBuyDate
   };
 }
 
-function scoreDeploymentResult(returns, winRate, avgLoss, worstLoss, avgDeployedCapitalPct, periodCount) {
-  const logReturns = returns.map(value => {
+function evaluateDeploymentPathAtExit(path, exit) {
+  let cash = 1;
+  let shares = 0;
+  let deployed = 0;
+  let buyCount = 0;
+
+  for (const event of path.buyEvents || []) {
+    if (event.date > exit.date) break;
+    cash -= event.amount;
+    shares += event.amount / event.price;
+    deployed += event.amount;
+    buyCount += 1;
+  }
+
+  if (!buyCount || !shares || deployed <= 0) return null;
+
+  const marketValue = shares * exit.price;
+  const value = cash + marketValue;
+  const accountReturnPct = (value - 1) * 100;
+  const deployedReturnPct = ((value - cash - deployed) / deployed) * 100;
+
+  return {
+    value,
+    cash,
+    marketValue,
+    deployed,
+    accountReturnPct,
+    deployedReturnPct,
+    returnPct: deployedReturnPct,
+    deployedCapitalPct: deployed * 100,
+    buyCount
+  };
+}
+
+function scoreDeploymentResult(deployedReturns, accountReturns, winRate, avgLoss, worstLoss, avgDeployedCapitalPct, periodCount) {
+  const logReturns = deployedReturns.map(value => {
     const growth = 1 + (value / 100);
     return Math.log(Math.max(0.000001, growth)) * 100;
   });
   const avgLogReturn = average(logReturns);
-  const lossRate = returns.length ? returns.filter(value => value < 0).length / returns.length : 1;
-  const usePenalty = avgDeployedCapitalPct < 25 ? (25 - avgDeployedCapitalPct) * 0.03 : 0;
+  const avgAccountReturn = average(accountReturns);
+  const lossRate = deployedReturns.length ? deployedReturns.filter(value => value < 0).length / deployedReturns.length : 1;
+  const usePenalty = avgDeployedCapitalPct < 25 ? (25 - avgDeployedCapitalPct) * 0.08 : 0;
   return avgLogReturn
-    + (average(returns) * 0.15)
+    + (average(deployedReturns) * 0.15)
+    + (avgAccountReturn * 0.1)
     + (winRate * 2)
     + (Math.log1p(periodCount) * 0.1)
     - (lossRate * 2)
@@ -2711,38 +3574,45 @@ function scoreDeploymentResult(returns, winRate, avgLoss, worstLoss, avgDeployed
     - usePenalty;
 }
 
-function simulateDeployment(flaggedRows, spySeries, allocationPct, checkpoints = loadReturnCheckpoints()) {
+function simulateDeployment(flaggedRows, marketSeries, allocationPct, checkpoints = loadReturnCheckpoints()) {
   const periods = buildDeploymentPeriods(flaggedRows);
   const periodResults = periods
-    .map(periodRows => simulateDeploymentPeriod(periodRows, spySeries, allocationPct, checkpoints))
+    .map(periodRows => simulateDeploymentPeriod(periodRows, marketSeries, allocationPct, checkpoints))
     .filter(Boolean);
 
-  const returns = periodResults.flatMap(period => period.observations.map(item => item.returnPct));
-  if (!returns.length) return null;
+  const observations = periodResults.flatMap(period => period.observations);
+  const deployedReturns = observations.map(item => item.deployedReturnPct).filter(Number.isFinite);
+  const accountReturns = observations.map(item => item.accountReturnPct).filter(Number.isFinite);
+  if (!deployedReturns.length) return null;
 
-  const wins = returns.filter(value => value > 0).length;
-  const losses = returns.filter(value => value < 0);
+  const wins = deployedReturns.filter(value => value > 0).length;
+  const losses = deployedReturns.filter(value => value < 0);
   const lossMagnitudes = losses.map(value => Math.abs(value));
-  const avgReturnPct = average(returns);
-  const winRate = wins / returns.length;
+  const avgReturnPct = average(deployedReturns);
+  const avgAccountReturnPct = average(accountReturns);
+  const winRate = wins / deployedReturns.length;
   const avgLoss = lossMagnitudes.length ? average(lossMagnitudes) : 0;
   const worstLoss = lossMagnitudes.length ? Math.max(...lossMagnitudes) : 0;
-  const avgDeployedCapitalPct = average(periodResults.map(period => period.deployedCapitalPct));
+  const avgDeployedCapitalPct = average(observations.map(item => item.deployedCapitalPct));
+  const avgFullPeriodDeployedCapitalPct = average(periodResults.map(period => period.deployedCapitalPct));
   const avgBuyDays = average(periodResults.map(period => period.buyCount));
   const buyCount = periodResults.reduce((sum, period) => sum + period.buyCount, 0);
 
   return {
     allocationPct,
-    deploymentScore: scoreDeploymentResult(returns, winRate, avgLoss, worstLoss, avgDeployedCapitalPct, periodResults.length),
-    totalReturnPct: avgReturnPct,
+    deploymentScore: scoreDeploymentResult(deployedReturns, accountReturns, winRate, avgLoss, worstLoss, avgDeployedCapitalPct, periodResults.length),
+    totalReturnPct: avgAccountReturnPct,
     avgReturnPct,
+    avgDeployedReturnPct: avgReturnPct,
+    avgAccountReturnPct,
     winRate,
     lossCount: losses.length,
-    observationCount: returns.length,
+    observationCount: deployedReturns.length,
     avgLoss,
     worstLoss,
     deployedCapitalPct: avgDeployedCapitalPct,
     avgDeployedCapitalPct,
+    avgFullPeriodDeployedCapitalPct,
     avgBuyDays,
     buyCount,
     periodCount: periodResults.length,
@@ -2940,11 +3810,11 @@ function scoreWalkForwardStability(walkForward) {
   return clampNumber(score, 0, 100, 0);
 }
 
-function evaluateCriteria(criteria, rows, spySeries, checkpoints = loadReturnCheckpoints(), optimizerSettings = loadOptimizerSettings()) {
+function evaluateCriteria(criteria, rows, marketSeries, checkpoints = loadReturnCheckpoints(), optimizerSettings = loadOptimizerSettings()) {
   const months = normalizeReturnCheckpoints(checkpoints);
   const settings = normalizeOptimizerSettings(optimizerSettings);
   const flagged = addRollingFlags(rows, criteria);
-  const forwardRows = buildForwardReturns(flagged, spySeries, months);
+  const forwardRows = buildForwardReturns(flagged, marketSeries, months);
   const stats = summarizeForwardReturnRows(forwardRows, months);
 
   if (stats.signalCount < 3 || stats.observationCount < 6) return null;
@@ -3037,7 +3907,7 @@ function renderOptimizerResults(results) {
 
   if (summary) {
     summary.textContent = results.length
-      ? `Top ${results.length} candidates ranked primarily by out-of-sample validation return, validation win rate, downside, stability, and fit to the ${formatRateRange(settings.targetMinPerYear, settings.targetMaxPerYear)} cadence target across ${formatCheckpointList(checkpoints)} checkpoints.${validationText} Recent cadence uses the last ${settings.recentYears} years and rules outside the overall or recent cadence target are penalized. Deployment stats reset capital for each contiguous signal period.`
+      ? `Top ${results.length} candidates ranked primarily by out-of-sample validation return, validation win rate, downside, stability, and fit to the ${formatRateRange(settings.targetMinPerYear, settings.targetMaxPerYear)} cadence target across ${formatCheckpointList(checkpoints)} checkpoints.${validationText} Recent cadence uses the last ${settings.recentYears} years and rules outside the overall or recent cadence target are penalized. Deployment stats simulate one policy path per contiguous signal period and rank deployment by return on deployed capital with account return shown separately.`
       : `No candidates had enough completed ${marketTicker} forward-return observations. Fetch data first or loosen the search ranges.`;
   }
   if (!wrap) return;
@@ -3064,7 +3934,8 @@ function renderOptimizerResults(results) {
             <th class="loss-cell">Avg loss</th>
             <th class="loss-cell">Worst loss</th>
             <th class="deploy-cell">Deploy/day</th>
-            <th class="return-cell">Period return</th>
+            <th class="return-cell">Deployed return</th>
+            <th class="return-cell">Account return</th>
             <th class="deploy-cell">Avg capital used</th>
             <th class="deploy-cell">Avg buy days</th>
             <th class="criteria-cell">Criteria</th>
@@ -3100,6 +3971,7 @@ function renderOptimizerResults(results) {
               <td class="loss-cell">${formatLossMagnitude(result.worstLoss)}</td>
               <td class="deploy-cell">${formatAllocationPercent(result.deployment?.allocationPct)}</td>
               <td class="return-cell">${formatPercent(result.deployment?.avgReturnPct)}</td>
+              <td class="return-cell">${formatPercent(result.deployment?.avgAccountReturnPct)}</td>
               <td class="deploy-cell">${formatPlainPercent(result.deployment?.avgDeployedCapitalPct)}</td>
               <td class="deploy-cell">${formatDeploymentBuyDays(result.deployment)}</td>
               <td class="criteria-cell">${escapeHtml(describeCriteria(result.criteria).replace(/^Active criteria: /, ""))}</td>
@@ -3213,7 +4085,7 @@ function applyOptimizerCriteria(index) {
   if (summary) {
     const criteriaText = describeCriteria(result.criteria).replace(/^Active criteria: /, "");
     const deployText = result.deployment
-      ? ` Suggested deployment: ${formatAllocationPercent(result.deployment.allocationPct)} of remaining cash on each active signal day inside each contiguous signal period; average period return ${formatPercent(result.deployment.avgReturnPct)} across ${result.deployment.observationCount} checkpoint observations, using ${formatNum(result.deployment.avgBuyDays)} buy days per period on average.`
+      ? ` Suggested deployment: ${formatAllocationPercent(result.deployment.allocationPct)} of remaining cash after each active signal day inside each contiguous signal period; average deployed return ${formatPercent(result.deployment.avgReturnPct)} and account return ${formatPercent(result.deployment.avgAccountReturnPct)} across ${result.deployment.observationCount} checkpoint observations, using ${formatNum(result.deployment.avgBuyDays)} buy days per period on average.`
       : "";
     const walkForward = result.walkForward;
     const validationText = walkForward?.foldCount
@@ -3353,7 +4225,7 @@ function drawOpportunityChart(rows, criteria = loadCriteria()) {
   const gridColor = isDark ? "rgba(229,231,235,.18)" : "rgba(31,41,55,.16)";
   const yearBoundaryColor = isDark ? "rgba(229,231,235,.28)" : "rgba(31,41,55,.24)";
   const lineColor = "#93c5fd";
-  const spyColor = "#b7791f";
+  const marketColor = "#b7791f";
   const markerColor = "#138a52";
   const signalPeriodColor = isDark ? "rgba(35, 197, 120, 0.16)" : "rgba(19, 138, 82, 0.13)";
 
@@ -3365,16 +4237,16 @@ function drawOpportunityChart(rows, criteria = loadCriteria()) {
   const plotH = height - pad.top - pad.bottom;
   const yForValue = value => pad.top + ((100 - value) / 100) * plotH;
   const xForIndex = index => pad.left + (rows.length <= 1 ? 0 : (index / (rows.length - 1)) * plotW);
-  const spyRows = rows
+  const marketRows = rows
     .map((row, index) => ({ row, index }))
-    .filter(item => Number.isFinite(item.row.spy));
-  const spyValues = spyRows.map(item => item.row.spy);
-  const spyMin = spyValues.length ? Math.min(...spyValues) : null;
-  const spyMax = spyValues.length ? Math.max(...spyValues) : null;
-  const spyPadding = spyMin == null || spyMax == null ? 0 : Math.max(1, (spyMax - spyMin) * 0.08);
-  const spyLow = spyMin == null ? null : spyMin - spyPadding;
-  const spyHigh = spyMax == null ? null : spyMax + spyPadding;
-  const yForSpy = value => pad.top + ((spyHigh - value) / (spyHigh - spyLow || 1)) * plotH;
+    .filter(item => Number.isFinite(item.row.price));
+  const marketValues = marketRows.map(item => item.row.price);
+  const marketMin = marketValues.length ? Math.min(...marketValues) : null;
+  const marketMax = marketValues.length ? Math.max(...marketValues) : null;
+  const marketPadding = marketMin == null || marketMax == null ? 0 : Math.max(1, (marketMax - marketMin) * 0.08);
+  const marketLow = marketMin == null ? null : marketMin - marketPadding;
+  const marketHigh = marketMax == null ? null : marketMax + marketPadding;
+  const yForMarket = value => pad.top + ((marketHigh - value) / (marketHigh - marketLow || 1)) * plotH;
 
   if (rows.length) {
     ctx.fillStyle = signalPeriodColor;
@@ -3479,13 +4351,13 @@ function drawOpportunityChart(rows, criteria = loadCriteria()) {
   });
   ctx.stroke();
 
-  if (spyRows.length > 1) {
-    ctx.strokeStyle = spyColor;
+  if (marketRows.length > 1) {
+    ctx.strokeStyle = marketColor;
     ctx.lineWidth = 1.6;
     ctx.beginPath();
-    spyRows.forEach((item, plotIndex) => {
+    marketRows.forEach((item, plotIndex) => {
       const x = xForIndex(item.index);
-      const y = yForSpy(item.row.spy);
+      const y = yForMarket(item.row.price);
       if (plotIndex === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     });
@@ -3494,8 +4366,8 @@ function drawOpportunityChart(rows, criteria = loadCriteria()) {
     ctx.fillStyle = mutedColor;
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    for (const value of [spyLow, (spyLow + spyHigh) / 2, spyHigh]) {
-      const y = yForSpy(value);
+    for (const value of [marketLow, (marketLow + marketHigh) / 2, marketHigh]) {
+      const y = yForMarket(value);
       ctx.fillText(`$${Math.round(value)}`, width - pad.right + 8, y);
     }
 
@@ -3505,12 +4377,15 @@ function drawOpportunityChart(rows, criteria = loadCriteria()) {
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index];
       if (!row.opportunityStart) continue;
-      const spyReference = Number.isFinite(row.spy)
-        ? row.spy
-        : (findPreviousSpyRow(rows, row.date) || findNextSpyRow(rows, row.date))?.spy;
-      if (!Number.isFinite(spyReference)) continue;
+      const marketReference = Number.isFinite(row.price)
+        ? row.price
+        : (findPreviousMarketRow(rows, row.date) || findNextMarketRow(rows, row.date))?.price;
+      if (!Number.isFinite(marketReference)) continue;
+      const marketReferenceKind = row.priceKind
+        || (findPreviousMarketRow(rows, row.date) || findNextMarketRow(rows, row.date))?.priceKind
+        || "";
       const x = xForIndex(index);
-      const y = yForSpy(spyReference);
+      const y = yForMarket(marketReference);
       ctx.beginPath();
       ctx.arc(x, y, 4, 0, Math.PI * 2);
       ctx.fill();
@@ -3521,7 +4396,8 @@ function drawOpportunityChart(rows, criteria = loadCriteria()) {
         radius: 9,
         row,
         marketTicker: loadMarketTicker(),
-        marketPrice: spyReference
+        marketPrice: marketReference,
+        marketPriceKind: marketReferenceKind
       });
     }
   }
@@ -3530,10 +4406,10 @@ function drawOpportunityChart(rows, criteria = loadCriteria()) {
   ctx.fillStyle = textColor;
   ctx.textAlign = "right";
   ctx.textBaseline = "top";
-  const latestSpy = [...rows].reverse().find(row => Number.isFinite(row.spy));
+  const latestMarket = [...rows].reverse().find(row => Number.isFinite(row.price));
   const marketTicker = loadMarketTicker();
-  const spyLabel = latestSpy ? ` | ${marketTicker} ${formatCurrency(latestSpy.spy)} on ${latestSpy.date}` : "";
-  ctx.fillText(`${latest.date}: ${formatNum(latest.value)}${spyLabel}`, width - pad.right, pad.top + 4);
+  const marketLabel = latestMarket ? ` | ${marketTicker} ${formatCurrency(latestMarket.price)} ${formatMarketPriceKind(latestMarket.priceKind)} on ${latestMarket.date}` : "";
+  ctx.fillText(`${latest.date}: ${formatNum(latest.value)}${marketLabel}`, width - pad.right, pad.top + 4);
 }
 
 function handleChartPointerMove(event) {
@@ -3606,7 +4482,8 @@ function hideChartTooltip() {
 function formatChartTooltip(marker) {
   const row = marker.row || {};
   const marketTicker = marker.marketTicker || loadMarketTicker();
-  const marketPrice = Number.isFinite(marker.marketPrice) ? marker.marketPrice : row.spy;
+  const marketPrice = Number.isFinite(marker.marketPrice) ? marker.marketPrice : row.price;
+  const marketPriceKind = marker.marketPriceKind || row.priceKind || "";
   const vixText = Number.isFinite(row.vix) ? formatNum(row.vix) : "n/a";
   const reason = Array.isArray(row.reasons) && row.reasons.length ? row.reasons.join("; ") : "Signal start";
   const durationDays = Number.isFinite(row.signalDurationDays) ? row.signalDurationDays : null;
@@ -3621,7 +4498,7 @@ function formatChartTooltip(marker) {
   return `
     <strong>Signal start: ${escapeHtml(row.date || "")}</strong>
     <div class="chart-tooltip-row"><span>Fear & Greed</span><b>${escapeHtml(formatNum(row.value))}</b></div>
-    <div class="chart-tooltip-row"><span>${escapeHtml(marketTicker)}</span><b>${escapeHtml(formatCurrency(marketPrice))}</b></div>
+    <div class="chart-tooltip-row"><span>${escapeHtml(`${marketTicker} ${formatMarketPriceKind(marketPriceKind)}`)}</span><b>${escapeHtml(formatCurrency(marketPrice))}</b></div>
     <div class="chart-tooltip-row"><span>VIX</span><b>${escapeHtml(vixText)}</b></div>
     <div class="chart-tooltip-row"><span>Duration</span><b>${escapeHtml(`${durationText}${rowSpanText}`)}</b></div>
     <div class="chart-tooltip-reason">${escapeHtml(reason)}</div>
@@ -3643,14 +4520,17 @@ function formatCurrency(x) {
 function formatPercent(x) {
   const n = Number(x);
   if (!Number.isFinite(n)) return "";
-  const sign = n > 0 ? "+" : "";
-  return `${sign}${n.toFixed(2)}%`;
+  const precision = loadPercentPrecision();
+  const rounded = roundPercentValue(n, precision);
+  const sign = rounded > 0 ? "+" : "";
+  return `${sign}${formatPercentNumber(rounded, precision)}%`;
 }
 
 function formatPlainPercent(x) {
   const n = Number(x);
   if (!Number.isFinite(n)) return "";
-  return `${n.toFixed(2)}%`;
+  const precision = loadPercentPrecision();
+  return `${formatPercentNumber(roundPercentValue(n, precision), precision)}%`;
 }
 
 function formatAllocationPercent(x) {
@@ -3660,24 +4540,41 @@ function formatAllocationPercent(x) {
 }
 
 function formatLossMagnitude(x) {
-  const n = Number(x);
+  const n = Math.abs(Number(x));
   if (!Number.isFinite(n)) return "";
-  if (n === 0) return "0.00%";
-  return `<span class="return-negative">-${n.toFixed(2)}%</span>`;
+  const precision = loadPercentPrecision();
+  const rounded = roundPercentValue(n, precision);
+  if (rounded === 0) return "0%";
+  return `<span class="return-negative">-${formatPercentNumber(rounded, precision)}%</span>`;
 }
 
 function formatPlainLossMagnitude(x) {
-  const n = Number(x);
+  const n = Math.abs(Number(x));
   if (!Number.isFinite(n)) return "";
-  if (n === 0) return "0.00%";
-  return `-${n.toFixed(2)}%`;
+  const precision = loadPercentPrecision();
+  const rounded = roundPercentValue(n, precision);
+  if (rounded === 0) return "0%";
+  return `-${formatPercentNumber(rounded, precision)}%`;
 }
 
 function formatProjectionPercent(x) {
   const n = Number(x);
   if (!Number.isFinite(n)) return "";
-  const klass = n >= 0 ? "return-positive" : "return-negative";
+  const rounded = roundPercentValue(n);
+  const klass = rounded >= 0 ? "return-positive" : "return-negative";
   return `<span class="${klass}">${formatPercent(n)}</span>`;
+}
+
+function roundPercentValue(value, precision = loadPercentPrecision()) {
+  const factor = 10 ** normalizePercentPrecision(precision);
+  const rounded = Math.round(Number(value) * factor) / factor;
+  return Object.is(rounded, -0) ? 0 : rounded;
+}
+
+function formatPercentNumber(value, precision = loadPercentPrecision()) {
+  const places = normalizePercentPrecision(precision);
+  const rounded = roundPercentValue(value, places);
+  return places > 0 ? rounded.toFixed(places) : String(Math.round(rounded));
 }
 
 function escapeHtml(s) {
@@ -3771,7 +4668,7 @@ async function fetchAllData() {
   lastFetchError = "";
   setFetchMessage(`Fetching long history, Yahoo ${marketTicker}, VIX, and live data...`);
   drawOverviewChart();
-  for (const key of ["spyYahoo", "vix", "history", "cnn"]) {
+  for (const key of ["marketYahoo", "vix", "history", "cnn"]) {
     setSourceFetchStatus(key, {
       state: "pending",
       detail: "Fetch in progress.",
@@ -3780,24 +4677,24 @@ async function fetchAllData() {
   }
 
   const rows = [];
-  const spyRows = [];
+  const marketRows = [];
   const vixRows = [];
   const warnings = [];
 
   try {
     try {
-      const spyPayload = await fetchYahooMarketChart(marketTicker);
-      const parsedSpy = parseYahooMarketChart(spyPayload, marketTicker);
-      spyRows.push(...parsedSpy);
-      const latestSpy = parsedSpy[parsedSpy.length - 1];
-      setSourceFetchStatus("spyYahoo", {
+      const marketPayload = await fetchYahooMarketChart(marketTicker);
+      const parsedMarket = parseYahooMarketChart(marketPayload, marketTicker);
+      marketRows.push(...parsedMarket);
+      const latestMarket = parsedMarket[parsedMarket.length - 1];
+      setSourceFetchStatus("marketYahoo", {
         state: "ok",
-        detail: `${parsedSpy.length.toLocaleString()} ${marketTicker} rows${latestSpy ? ` through ${latestSpy.date}` : ""}.`,
+        detail: `${parsedMarket.length.toLocaleString()} ${marketTicker} ${describeMarketPriceKind(parsedMarket)} rows${latestMarket ? ` through ${latestMarket.date}` : ""}.`,
         action: "No action needed."
       });
     } catch (err) {
       warnings.push(`Yahoo ${marketTicker} chart fetch failed (${err.message})`);
-      setSourceFetchStatus("spyYahoo", {
+      setSourceFetchStatus("marketYahoo", {
         state: "warn",
         detail: `Fetch failed: ${err.message}.`,
         action: `Refresh now to retry Yahoo ${marketTicker} history.`
@@ -3862,14 +4759,14 @@ async function fetchAllData() {
       throw new Error(warnings.join("; ") || "no data returned");
     }
 
-    const merged = saveFetchedRows(rows, spyRows, vixRows, marketTicker);
+    const merged = saveFetchedRows(rows, marketRows, vixRows, marketTicker);
     const latest = merged[merged.length - 1];
-    const latestSpy = [...loadSpySeries(marketTicker)].reverse().find(row => Number.isFinite(row.spy));
+    const latestMarket = [...loadMarketSeries(marketTicker)].reverse().find(row => Number.isFinite(row.price));
     const latestVix = [...merged].reverse().find(row => Number.isFinite(row.vix));
     const warningText = warnings.length ? ` Warning: ${warnings.join("; ")}.` : "";
 
     setFetchMessage(
-      `Saved ${merged.length.toLocaleString()} rows from ${merged[0].date} to ${latest.date}. Latest score: ${formatNum(latest.value)}. Latest ${marketTicker}: ${latestSpy ? `${formatCurrency(latestSpy.spy)} on ${latestSpy.date}` : "none"}. Latest VIX: ${latestVix ? `${formatNum(latestVix.vix)} on ${latestVix.date}` : "none"}.${warningText}`
+      `Saved ${merged.length.toLocaleString()} rows from ${merged[0].date} to ${latest.date}. Latest score: ${formatNum(latest.value)}. Latest ${marketTicker}: ${latestMarket ? `${formatCurrency(latestMarket.price)} ${formatMarketPriceKind(latestMarket.priceKind)} on ${latestMarket.date}` : "none"}. Latest VIX: ${latestVix ? `${formatNum(latestVix.vix)} on ${latestVix.date}` : "none"}.${warningText}`
     );
   } finally {
     dataFetchInProgress = false;
@@ -3895,7 +4792,7 @@ $("refreshBtn").addEventListener("click", async () => {
 $("clearBtn").addEventListener("click", () => {
   if (confirm("Clear locally saved Fear & Greed history and market price cache?")) {
     localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(SPY_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_SPY_STORAGE_KEY);
     localStorage.removeItem(MARKET_SERIES_STORAGE_KEY);
     for (const key of LEGACY_STORAGE_KEYS) localStorage.removeItem(key);
     clearOptimizerResults();
@@ -3951,9 +4848,9 @@ $("saveMarketTickerBtn").addEventListener("click", async () => {
   }
 
   clearOptimizerResults();
-  delete sourceFetchStatus.spyYahoo;
+  delete sourceFetchStatus.marketYahoo;
   render();
-  if (nextTicker !== previousTicker || !loadSpySeries(nextTicker).length) {
+  if (nextTicker !== previousTicker || !loadMarketSeries(nextTicker).length) {
     setFetchMessage(`Market ticker set to ${nextTicker}. Fetching ${nextTicker} history...`);
     try {
       await fetchAllData();
@@ -3966,9 +4863,9 @@ $("saveMarketTickerBtn").addEventListener("click", async () => {
 $("resetMarketTickerBtn").addEventListener("click", async () => {
   saveMarketTicker(DEFAULT_MARKET_TICKER);
   clearOptimizerResults();
-  delete sourceFetchStatus.spyYahoo;
+  delete sourceFetchStatus.marketYahoo;
   render();
-  if (!loadSpySeries(DEFAULT_MARKET_TICKER).length) {
+  if (!loadMarketSeries(DEFAULT_MARKET_TICKER).length) {
     try {
       await fetchAllData();
     } catch (err) {
@@ -3993,6 +4890,16 @@ $("resetCheckpointsBtn").addEventListener("click", () => {
   saveReturnCheckpoints(DEFAULT_RETURN_CHECKPOINTS);
   clearOptimizerResults();
   render();
+});
+
+$("savePercentPrecisionBtn").addEventListener("click", () => {
+  savePercentPrecision(readPercentPrecisionControls());
+  rerenderPercentDisplays();
+});
+
+$("resetPercentPrecisionBtn").addEventListener("click", () => {
+  savePercentPrecision(DEFAULT_PERCENT_PRECISION);
+  rerenderPercentDisplays();
 });
 
 $("saveOptimizerSettingsBtn").addEventListener("click", () => {
@@ -4043,12 +4950,15 @@ document.querySelectorAll(".tab-button").forEach(button => {
 
     if (selectedTab === "overview") {
       drawOverviewChart();
+    } else if (selectedTab === "capital") {
+      drawCapitalStrategyChart();
     }
   });
 });
 
 window.addEventListener("resize", () => {
   drawOverviewChart();
+  if (!$("panel-capital")?.hidden) drawCapitalStrategyChart();
 });
 
 renderOptimizerResults(optimizerResults);

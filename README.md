@@ -5,7 +5,7 @@ http://kachurovskiy.com/redalert/ - single-file, browser-only monitor for contra
 ## What It Does
 
 - Fetches long historical Fear & Greed coverage from `whit3rabbit/fear-greed-data`.
-- Fetches the selected market ticker's daily close history from Yahoo Finance's chart endpoint through a browser-readable text proxy.
+- Fetches the selected market ticker's daily adjusted close history from Yahoo Finance's chart endpoint through a browser-readable text proxy when available, falling back to close values when adjusted close is missing.
 - Fetches VIX close history from the `datasets/finance-vix` daily CSV on GitHub.
 - Merges in the live CNN Fear & Greed graph data on page load.
 - Uses only the aggregate `fear_and_greed.score` and `fear_and_greed_historical.data` fields from CNN.
@@ -16,8 +16,8 @@ http://kachurovskiy.com/redalert/ - single-file, browser-only monitor for contra
 - Keeps the current signal summary on a separate tab whose label reports whether a signal is active.
 - Shows 1, 3, 6, and 12 month historical forward-return averages on the Signal tab, using prior signal starts under the current criteria. These are backward-looking samples, not forecasts.
 - Groups signal criteria, market ticker selection, return checkpoints, optimizer cadence, and full local-storage reset controls in the Settings tab.
-- Provides an optimizer tab that ranks candidate criteria primarily by expanding walk-forward out-of-sample validation, while still showing full-history context, loss rate, loss size, and a configurable signal cadence target. Rows include train average return, validation average return, validation win rate, worst validation return, validation signal count, and a stability score; applying a rule with strong in-sample results but weak validation evidence requires confirmation. It also estimates the best percent of remaining cash to deploy on each active signal day, resetting capital for each contiguous signal period rather than holding all buys to the latest date. Optimizer work runs in a Web Worker pool when multiple CPU cores are available, with progress reporting so the page remains responsive.
-- Shows selected-ticker forward returns after configurable month checkpoints, defaulting to 3, 6, and 12 months, with per-horizon stats for win rate, median return, median gain/loss, and best/worst outcomes.
+- Provides an optimizer tab that ranks candidate criteria primarily by expanding walk-forward out-of-sample validation, while still showing full-history context, loss rate, loss size, and a configurable signal cadence target. Rows include train average return, validation average return, validation win rate, worst validation return, validation signal count, and a stability score; applying a rule with strong in-sample results but weak validation evidence requires confirmation. It also estimates the best percent of remaining cash to deploy after each active signal day, simulating one policy path per contiguous signal period and reporting deployed-capital return separately from account-level return. Optimizer work runs in a Web Worker pool when multiple CPU cores are available, with progress reporting so the page remains responsive.
+- Shows selected-ticker forward returns after configurable month checkpoints, defaulting to 3, 6, and 12 months, with per-horizon stats for win rate, average and median return, median and maximum gain/loss, and comparison against always entering on every selected-ticker trading day in the same history range. Signal and benchmark stats require exits to complete inside the saved sentiment-history window.
 - Shows data-source status in the Sources tab and highlights when automatic refresh action is needed.
 - Keeps the detailed row table on a secondary tab.
 - Stores normalized history and settings only in the browser's `localStorage`, with a Settings reset button that clears local storage and refreshes the page.
@@ -35,9 +35,9 @@ If browser CORS policy blocks the direct CNN request, the page retries through t
 - CNN and Fear & Greed Index names belong to their respective owners.
 - This repository does not include or redistribute CNN data; the browser fetches data at runtime.
 - The long-history source is the canonical `fear-greed.csv` documented by `whit3rabbit/fear-greed-data`: https://github.com/whit3rabbit/fear-greed-data
-- The selected ticker overlay and forward-return calculations use Yahoo Finance chart data, read through `r.jina.ai` because Yahoo does not expose browser-readable CORS headers for the chart JSON. SPY is the default, with QQQ, TQQQ, and custom Yahoo symbols available from Settings.
+- The selected ticker overlay and forward-return calculations use Yahoo Finance adjusted close chart data when available, read through `r.jina.ai` because Yahoo does not expose browser-readable CORS headers for the chart JSON. SPY is the default, with QQQ, TQQQ, and custom Yahoo symbols available from Settings; rows without adjusted close fall back to close.
 - VIX values use the `datasets/finance-vix` daily CSV: https://raw.githubusercontent.com/datasets/finance-vix/main/data/vix-daily.csv
-- Forward returns use the selected ticker price at the signal and the first available selected-ticker trading day on or after each target date.
+- Forward returns use the selected ticker adjusted close on the next selected-ticker trading day after the signal date when available, with each holding-period target measured from that entry date and exited on the first available selected-ticker trading day on or after the target date.
 - Review CNN's current Terms of Use before relying on this in a public or production context: https://www.cnn.com/terms
 - This is not financial advice and should not be used as the sole basis for trading or investment decisions.
 
