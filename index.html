@@ -861,7 +861,7 @@
           <canvas id="capitalStrategyChart" width="1200" height="320" aria-label="Capital deployment strategy outcome chart"></canvas>
         </div>
         <div class="legend">
-          <span class="legend-item"><span class="swatch capital-now"></span>Invest right away</span>
+          <span class="legend-item"><span class="swatch capital-now"></span>Invest monthly now</span>
           <span class="legend-item"><span class="swatch capital-wait"></span>Wait for signal</span>
           <span class="legend-item"><span class="swatch capital-contributed"></span>Contributed</span>
         </div>
@@ -2655,7 +2655,7 @@ function renderCapitalStrategies(rows) {
             <th class="date-cell">Start</th>
             <th class="count-cell">Months</th>
             <th class="money-cell">Contributed</th>
-            <th class="money-cell">Invest right away</th>
+            <th class="money-cell">Invest monthly now</th>
             <th class="money-cell">Wait for signal</th>
             <th class="money-cell">Advantage</th>
             <th class="return-cell">Now max DD</th>
@@ -2861,19 +2861,19 @@ function renderCapitalExecutiveSummary(rows) {
   const latest = source[source.length - 1];
   const latestAdvantage = latest.waitForSignal.value - latest.investNow.value;
   const winnerText = avgAdvantage > 0.5
-    ? `Waiting led by ${formatWholeCurrency(avgAdvantage)} on average.`
+    ? `Waiting for signals led by ${formatWholeCurrency(avgAdvantage)} on average.`
     : avgAdvantage < -0.5
-      ? `Investing right away led by ${formatWholeCurrency(Math.abs(avgAdvantage))} on average.`
+      ? `Investing each monthly contribution immediately led by ${formatWholeCurrency(Math.abs(avgAdvantage))} on average.`
       : "The average ending value was effectively tied.";
   const latestWinner = latestAdvantage > 0.5
-    ? `waiting led by ${formatWholeCurrency(latestAdvantage)}`
+    ? `waiting for signals led by ${formatWholeCurrency(latestAdvantage)}`
     : latestAdvantage < -0.5
-      ? `investing right away led by ${formatWholeCurrency(Math.abs(latestAdvantage))}`
+      ? `investing each monthly contribution immediately led by ${formatWholeCurrency(Math.abs(latestAdvantage))}`
       : "both strategies were effectively tied";
 
   executive.className = avgAdvantage >= 0 ? "source-summary ok" : "source-summary warn";
   executive.textContent =
-    `${winnerText} Waiting won ${waitWins} of ${source.length} start dates, investing right away won ${nowWins}${ties ? `, and ${ties} tied` : ""}. Worst max drawdown was ${formatPlainLossMagnitude(worstWaitDrawdown)} for waiting versus ${formatPlainLossMagnitude(worstNowDrawdown)} for investing right away. Largest wait advantage was ${formatWholeCurrency(bestWaitAdvantage)}; largest invest-now advantage was ${formatWholeCurrency(bestNowAdvantage)}. For the most recent start (${latest.start.date}), ${latestWinner}.`;
+    `${winnerText} Waiting for signals won ${waitWins} of ${source.length} start dates, investing monthly immediately won ${nowWins}${ties ? `, and ${ties} tied` : ""}. Worst max drawdown was ${formatPlainLossMagnitude(worstWaitDrawdown)} for waiting versus ${formatPlainLossMagnitude(worstNowDrawdown)} for investing monthly immediately. Largest wait advantage was ${formatWholeCurrency(bestWaitAdvantage)}; largest monthly-now advantage was ${formatWholeCurrency(bestNowAdvantage)}. For the most recent start (${latest.start.date}), ${latestWinner}.`;
 }
 
 function formatCapitalStrategyValue(strategy, totalContributed) {
