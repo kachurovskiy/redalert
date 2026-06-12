@@ -702,9 +702,6 @@
             <span id="opportunityCount" class="metric-value">-</span>
           </div>
         </div>
-        <h3>Historical forward returns</h3>
-        <p id="signalProjectionSummary" class="muted"></p>
-        <div id="signalProjectionWrap" class="table-scroll"></div>
         <div class="row signal-actions">
           <button id="refreshBtn" class="primary" type="button">Refresh now</button>
           <button id="clearBtn" class="danger" type="button">Clear local history</button>
@@ -941,7 +938,6 @@ const DEFAULT_CRITERIA = Object.freeze({
   vixHigh: { enabled: true, threshold: 35, days: 1 }
 });
 const DEFAULT_RETURN_CHECKPOINTS = Object.freeze([3, 6, 12]);
-const SIGNAL_PROJECTION_CHECKPOINTS = Object.freeze([1, 3, 6, 12]);
 const CHART_RANGE_OPTIONS = Object.freeze([0, 10, 5, 3, 1]);
 const DEFAULT_CHART_RANGE_YEARS = 10;
 const NARROW_CHART_RANGE_YEARS = 1;
@@ -1708,7 +1704,6 @@ function render() {
   renderCheckpointControls(checkpoints);
   renderPercentPrecisionControls(percentPrecision);
   renderOptimizerSettingsControls(optimizerSettings);
-  renderSignalProjection(flagged, latest);
   renderSourceStatus(rows);
   renderOverviewLoadState(rows);
 
@@ -2444,85 +2439,6 @@ function formatReturnStatPlainPercent(value) {
 
 function formatMutedText(text) {
   return `<span class="muted">${escapeHtml(text)}</span>`;
-}
-
-function renderSignalProjection(rows, latest) {
-  const summary = $("signalProjectionSummary");
-  const wrap = $("signalProjectionWrap");
-  if (!summary || !wrap) return;
-
-  if (!latest) {
-    summary.textContent = "No latest row yet.";
-    wrap.innerHTML = "";
-    return;
-  }
-
-  const marketSeries = buildMarketSeries(rows);
-  const entry = findPreviousMarketRow(marketSeries, latest.date) || findNextMarketRow(marketSeries, latest.date);
-  const projections = buildSignalProjectionStats(rows, latest, marketSeries, SIGNAL_PROJECTION_CHECKPOINTS);
-  const maxSampleCount = Math.max(0, ...projections.map(item => item.count));
-  const marketTicker = loadMarketTicker();
-  const entryText = entry ? ` Current ${marketTicker} reference: ${formatCurrency(entry.price)} on ${entry.date}.` : ` No current ${marketTicker} reference is available.`;
-  const stateText = latest.opportunity
-    ? `Active signal on ${latest.date}.`
-    : `No active signal on ${latest.date}.`;
-
-  summary.textContent =
-    `${stateText} Historical forward returns below use prior signal starts under the current criteria before ${latest.date}, entering on the next ${marketTicker} trading day; they are backward-looking samples, not forecasts. ${maxSampleCount.toLocaleString()} samples are available at the most-complete horizon.${entryText}`;
-
-  wrap.innerHTML = projections.some(item => item.count)
-    ? `<table>
-        <thead>
-          <tr>
-            <th>Horizon</th>
-            <th>Average return</th>
-            <th>Median</th>
-            <th>Win rate</th>
-            <th>Samples</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${projections.map(item => {
-            return `
-            <tr>
-              <td>${escapeHtml(formatCheckpointLabel(item.months))}</td>
-              <td>${formatProjectionPercent(item.avg)}</td>
-              <td>${formatProjectionPercent(item.median)}</td>
-              <td>${formatPercent(item.winRate * 100)}</td>
-              <td>${item.count}</td>
-            </tr>`;
-          }).join("")}
-        </tbody>
-      </table>`
-    : `<p class="muted">No completed historical forward returns are available for the current criteria.</p>`;
-}
-
-function buildSignalProjectionStats(rows, latest, marketSeries, checkpoints) {
-  const months = normalizeReturnCheckpoints(checkpoints);
-  const valuesByMonth = new Map(months.map(value => [value, []]));
-
-  for (const row of rows) {
-    if (!row.opportunityStart || row.date >= latest.date) continue;
-    const entry = findEntryAfterSignal(marketSeries, row.date);
-    for (const monthsValue of months) {
-      const result = buildForwardReturn(marketSeries, row.date, entry, monthsValue);
-      if (Number.isFinite(result.pct) && (!latest.date || result.exit?.date <= latest.date)) {
-        valuesByMonth.get(monthsValue).push(result.pct);
-      }
-    }
-  }
-
-  return months.map(monthsValue => {
-    const values = valuesByMonth.get(monthsValue) || [];
-    const wins = values.filter(value => value > 0).length;
-    return {
-      months: monthsValue,
-      count: values.length,
-      avg: average(values),
-      median: median(values),
-      winRate: values.length ? wins / values.length : NaN
-    };
-  });
 }
 
 function buildForwardReturns(rows, marketSeries = buildMarketSeries(rows), checkpoints = loadReturnCheckpoints()) {
